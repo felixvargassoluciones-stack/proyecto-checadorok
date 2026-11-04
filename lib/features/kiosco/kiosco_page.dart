@@ -173,22 +173,25 @@ class _KioscoPageState extends State<KioscoPage> {
 
           if (esMovil) {
             return SafeArea(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    _buildSeccionVisual(esMovil: true),
-                    Padding(
+              child: Column(
+                children: [
+                  // La sección visual de la cámara permanece totalmente estática arriba
+                  _buildSeccionVisual(esMovil: true),
+                  
+                  // Únicamente la sección de controles tiene scroll independiente por debajo
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
                       child: _buildSeccionControles(esMovil: true),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           }
 
-          // Distribución horizontal para pantallas grandes (Tablets/Monitores)
+          // Distribución horizontal tradicional para pantallas grandes (Tablets/Monitores)
           return Row(
             children: [
               Expanded(
@@ -215,7 +218,7 @@ class _KioscoPageState extends State<KioscoPage> {
   Widget _buildSeccionVisual({required bool esMovil}) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(vertical: esMovil ? 24.0 : 40.0, horizontal: 16.0),
+      padding: EdgeInsets.symmetric(vertical: esMovil ? 16.0 : 40.0, horizontal: 16.0),
       color: Colors.teal,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -224,15 +227,15 @@ class _KioscoPageState extends State<KioscoPage> {
             'VALIDACIÓN VISUAL',
             style: TextStyle(
               color: Colors.white, 
-              fontSize: esMovil ? 18 : 22, 
+              fontSize: esMovil ? 16 : 22, 
               fontWeight: FontWeight.bold, 
               letterSpacing: 2
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           Container(
-            width: esMovil ? 180 : 280,
-            height: esMovil ? 180 : 280,
+            width: esMovil ? 150 : 280,
+            height: esMovil ? 150 : 280,
             decoration: BoxDecoration(
               color: Colors.black12,
               shape: BoxShape.circle,
@@ -243,10 +246,10 @@ class _KioscoPageState extends State<KioscoPage> {
                 ? CameraPreview(_cameraController!)
                 : const Center(child: CircularProgressIndicator(color: Colors.white)),
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: 10),
           Text(
             'Asegúrate de que tu rostro sea visible',
-            style: TextStyle(color: Colors.white70, fontSize: esMovil ? 12 : 14),
+            style: TextStyle(color: Colors.white70, fontSize: esMovil ? 11 : 14),
             textAlign: TextAlign.center,
           ),
         ],
@@ -271,7 +274,7 @@ class _KioscoPageState extends State<KioscoPage> {
             ? Column(
                 children: [
                   _buildTecladoNumerico(tamanoReducido: true),
-                  const SizedBox(height: 25),
+                  const SizedBox(height: 20),
                   _buildBotonesAccion(esMovil: true),
                 ],
               )
