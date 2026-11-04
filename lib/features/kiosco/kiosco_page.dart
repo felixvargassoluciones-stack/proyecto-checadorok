@@ -22,7 +22,6 @@ class _KioscoPageState extends State<KioscoPage> {
     _configurarCamara();
   }
 
-  /// Inicializa la cámara frontal del dispositivo/tablet
   Future<void> _configurarCamara() async {
     try {
       final camaras = await availableCameras();
@@ -61,7 +60,6 @@ class _KioscoPageState extends State<KioscoPage> {
       setState(() => _pinIngresado = _pinIngresado.substring(0, _pinIngresado.length - 1));
     }
   }
-  /// Procesa el checado real subiendo la selfie e insertando en Supabase
   void _procesarChecado(String tipoEvento) async {
     if (_pinIngresado.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -119,7 +117,7 @@ class _KioscoPageState extends State<KioscoPage> {
         'sucursal_id': datosEmpleado['sucursal_id'],
         'tipo_evento': tipoEvento,
         'selfie_url': urlPublicaSelfie,
-        'dispositivo_info': 'Kiosco Web (Tablet Corporativa)',
+        'dispositivo_info': 'Kiosco Web (Tablet/Móvil Responsivo)',
       });
 
       if (!mounted) return;
@@ -164,138 +162,229 @@ class _KioscoPageState extends State<KioscoPage> {
     _cameraController?.dispose();
     super.dispose();
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Row(
-        children: [
-          Expanded(
-            flex: 4,
-            child: Container(
-              color: Colors.teal,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    'VALIDACIÓN VISUAL',
-                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 2),
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    width: 280,
-                    height: 280,
-                    decoration: BoxDecoration(
-                      color: Colors.black12,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 4),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Detectamos si la pantalla es pequeña (Móvil) o grande (Tablet/PC)
+          final bool esMovil = constraints.maxWidth < 750;
+
+          if (esMovil) {
+            return SafeArea(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  children: [
+                    _buildSeccionVisual(esMovil: true),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+                      child: _buildSeccionControles(esMovil: true),
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: _camaraInicializada
-                        ? CameraPreview(_cameraController!)
-                        : const Center(child: CircularProgressIndicator(color: Colors.white)),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Asegúrate de que tu rostro sea visible',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                ],
+                  ],
+                ),
               ),
+            );
+          }
+
+          // Distribución horizontal para pantallas grandes (Tablets/Monitores)
+          return Row(
+            children: [
+              Expanded(
+                flex: 4,
+                child: _buildSeccionVisual(esMovil: false),
+              ),
+              Expanded(
+                flex: 5,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 20.0),
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: _buildSeccionControles(esMovil: false),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+  /// Construye el panel de la cámara y el indicador visual de rostro
+  Widget _buildSeccionVisual({required bool esMovil}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(vertical: esMovil ? 24.0 : 40.0, horizontal: 16.0),
+      color: Colors.teal,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'VALIDACIÓN VISUAL',
+            style: TextStyle(
+              color: Colors.white, 
+              fontSize: esMovil ? 18 : 22, 
+              fontWeight: FontWeight.bold, 
+              letterSpacing: 2
             ),
           ),
-          Expanded(
-            flex: 5,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 20.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+          const SizedBox(height: 20),
+          Container(
+            width: esMovil ? 180 : 280,
+            height: esMovil ? 180 : 280,
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 4),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: _camaraInicializada
+                ? CameraPreview(_cameraController!)
+                : const Center(child: CircularProgressIndicator(color: Colors.white)),
+          ),
+          const SizedBox(height: 15),
+          Text(
+            'Asegúrate de que tu rostro sea visible',
+            style: TextStyle(color: Colors.white70, fontSize: esMovil ? 12 : 14),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+  /// Orquesta la visualización del PIN, el teclado y los botones de acción
+  Widget _buildSeccionControles({required bool esMovil}) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          _pinIngresado.isEmpty ? '--- ---' : _pinIngresado,
+          style: TextStyle(
+            fontSize: esMovil ? 28 : 36, 
+            fontWeight: FontWeight.bold, 
+            color: Colors.teal
+          ),
+        ),
+        const SizedBox(height: 20),
+        esMovil
+            ? Column(
                 children: [
-                  Text(
-                    _pinIngresado.isEmpty ? '--- ---' : _pinIngresado,
-                    style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.teal),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      SizedBox(
-                        width: 240,
-                        child: GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                          ),
-                          itemCount: 12,
-                          itemBuilder: (context, index) {
-                            String textoBoton = '';
-                            if (index < 9) textoBoton = '${index + 1}';
-                            if (index == 9) textoBoton = 'C'; 
-                            if (index == 10) textoBoton = '0';
-                            if (index == 11) textoBoton = '⌫'; 
-                            
-                            return ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: textoBoton == 'C' || textoBoton == '⌫' ? Colors.grey : Colors.white,
-                                foregroundColor: Colors.teal,
-                                elevation: 1,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              onPressed: () {
-                                if (textoBoton == 'C') {
-                                  setState(() => _pinIngresado = '');
-                                } else if (textoBoton == '⌫') {
-                                  _borrarTecla();
-                                } else {
-                                  _presionarTecla(textoBoton);
-                                }
-                              },
-                              child: Text(textoBoton, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                            );
-                          },
-                        ),
-                      ),
-                      Column(
-                        children: [
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, fixedSize: const Size(180, 50)),
-                            onPressed: () => _procesarChecado('ENTRADA'),
-                            icon: const Icon(Icons.login),
-                            label: const Text('ENTRADA'),
-                          ),
-                          const SizedBox(height: 10),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, fixedSize: const Size(180, 50)),
-                            onPressed: () => _procesarChecado('SALIDA_COMER'),
-                            icon: const Icon(Icons.restaurant),
-                            label: const Text('SALIDA COMER'),
-                          ),
-                          const SizedBox(height: 10),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.white, fixedSize: const Size(180, 50)),
-                            onPressed: () => _procesarChecado('REGRESO_COMER'),
-                            icon: const Icon(Icons.restaurant_menu),
-                            label: const Text('REGRESO COMER'),
-                          ),
-                          const SizedBox(height: 10),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, fixedSize: const Size(180, 50)),
-                            onPressed: () => _procesarChecado('SALIDA'),
-                            icon: const Icon(Icons.logout),
-                            label: const Text('SALIDA FINAL'),
-                          ),
-                        ],
-                      )
-                    ],
-                  ),
+                  _buildTecladoNumerico(tamanoReducido: true),
+                  const SizedBox(height: 25),
+                  _buildBotonesAccion(esMovil: true),
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Expanded(child: _buildTecladoNumerico(tamanoReducido: false)),
+                  const SizedBox(width: 20),
+                  _buildBotonesAccion(esMovil: false),
                 ],
               ),
+      ],
+    );
+  }
+
+  /// Construye la cuadrícula del teclado numérico
+  Widget _buildTecladoNumerico({required bool tamanoReducido}) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: tamanoReducido ? 280 : 240),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+        ),
+        itemCount: 12,
+        itemBuilder: (context, index) {
+          String textoBoton = '';
+          if (index < 9) textoBoton = '${index + 1}';
+          if (index == 9) textoBoton = 'C';
+          if (index == 10) textoBoton = '0';
+          if (index == 11) textoBoton = '⌫';
+
+          return ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: textoBoton == 'C' || textoBoton == '⌫' ? Colors.grey : Colors.white,
+              foregroundColor: Colors.teal,
+              elevation: 1,
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
+            onPressed: () {
+              if (textoBoton == 'C') {
+                setState(() => _pinIngresado = '');
+              } else if (textoBoton == '⌫') {
+                _borrarTecla();
+              } else {
+                _presionarTecla(textoBoton);
+              }
+            },
+            child: Text(
+              textoBoton, 
+              style: TextStyle(fontSize: tamanoReducido ? 18 : 20, fontWeight: FontWeight.bold)
+            ),
+          );
+        },
+      ),
+    );
+  }
+  /// Construye los botones laterales o inferiores para registrar eventos en Supabase
+  Widget _buildBotonesAccion({required bool esMovil}) {
+    final double anchoBoton = esMovil ? double.infinity : 180.0;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: esMovil ? double.infinity : 180.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green, 
+              foregroundColor: Colors.white, 
+              minimumSize: Size(anchoBoton, 50)
+            ),
+            onPressed: () => _procesarChecado('ENTRADA'),
+            icon: const Icon(Icons.login),
+            label: const Text('ENTRADA'),
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange, 
+              foregroundColor: Colors.white, 
+              minimumSize: Size(anchoBoton, 50)
+            ),
+            onPressed: () => _procesarChecado('SALIDA_COMER'),
+            icon: const Icon(Icons.restaurant),
+            label: const Text('SALIDA COMER'),
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber, 
+              foregroundColor: Colors.white, 
+              minimumSize: Size(anchoBoton, 50)
+            ),
+            onPressed: () => _procesarChecado('REGRESO_COMER'),
+            icon: const Icon(Icons.restaurant_menu),
+            label: const Text('REGRESO COMER'),
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red, 
+              foregroundColor: Colors.white, 
+              minimumSize: Size(anchoBoton, 50)
+            ),
+            onPressed: () => _procesarChecado('SALIDA'),
+            icon: const Icon(Icons.logout),
+            label: const Text('SALIDA FINAL'),
           ),
         ],
       ),
