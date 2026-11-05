@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/supabase_service.dart';
 
@@ -15,6 +16,31 @@ class _AdminPageState extends State<AdminPage> {
     end: DateTime.now(),
   );
 
+  // NUEVAS VARIABLES INYECTADAS: Soporte para el reloj digital en tiempo real en el panel
+  Timer? _relojTimer;
+  String _horaDigital = "00:00:00";
+  @override
+  void initState() {
+    super.initState();
+    _iniciarReloj();
+  }
+
+  @override
+  void dispose() {
+    _relojTimer?.cancel();
+    super.dispose();
+  }
+
+  void _iniciarReloj() {
+    _relojTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final ahora = DateTime.now();
+      if (mounted) {
+        setState(() {
+          _horaDigital = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')}:${ahora.second.toString().padLeft(2, '0')}";
+        });
+      }
+    });
+  }
   /// Función simulada para descargar el archivo Excel limpio
   void _descargarExcel() {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -34,14 +60,33 @@ class _AdminPageState extends State<AdminPage> {
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         backgroundColor: Colors.teal,
-        title: const Text('PANEL DE ADMINISTRACIÓN - REGLAS DE ASISTENCIA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Row(
+          children: [
+            const Text(
+              'PANEL DE ADMINISTRACIÓN - REGLAS DE ASISTENCIA', 
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+            ),
+            const SizedBox(width: 20),
+            // RELOJ DIGITAL: Visible en la barra superior al lado del título
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(40),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _horaDigital,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1),
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.download_for_offline, color: Colors.white),
@@ -78,7 +123,6 @@ class _AdminPageState extends State<AdminPage> {
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
             const SizedBox(height: 15),
-            
             const Text(
               'MONITOREO DE ASISTENCIAS EN TIEMPO REAL (FEED DE SELFIES)',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1),
@@ -100,7 +144,6 @@ class _AdminPageState extends State<AdminPage> {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator(color: Colors.teal));
                   }
-                  
                   final registros = snapshot.data ?? [];
                   if (registros.isEmpty) {
                     return const Center(
@@ -189,7 +232,6 @@ class _AdminPageState extends State<AdminPage> {
       ),
     );
   }
-
   /// Constructor auxiliar para las tarjetas de métricas del encabezado (Reparado)
   Widget _buildCardMetrica(String titulo, String valor, IconData icono, Color color) {
     return Expanded(
