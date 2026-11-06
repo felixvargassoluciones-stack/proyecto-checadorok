@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/supabase_service.dart';
 import 'features/kiosco/kiosco_page.dart';
 import 'features/admin/admin_page.dart';
-import 'features/historial/historial_page.dart'; // Nueva importación saneada
+import 'features/historial/historial_page.dart';
 
 void main() async {
   // Asegura que el motor de Flutter esté listo antes de inicializar servicios

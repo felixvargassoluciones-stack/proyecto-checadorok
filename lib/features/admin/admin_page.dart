@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/supabase_service.dart';
 
-//  SOLUCIÓN AL PARPADEO: Widget aislado para que el segundero no redibuje el feed de Supabase
+// COMPONENTE AISLADO: Evita que el segundero redibuje el feed completo de Supabase
 class RelojDigitalIndependiente extends StatefulWidget {
   const RelojDigitalIndependiente({super.key});
 
@@ -73,7 +73,6 @@ class _AdminPageState extends State<AdminPage> {
     _pinAltaController.dispose();
     super.dispose();
   }
-
   Future<void> _registrarNuevoEmpleado() async {
     if (!_formKey.currentState!.validate() || _guardandoEmpleado) return;
 
@@ -135,7 +134,6 @@ class _AdminPageState extends State<AdminPage> {
       const SnackBar(content: Text('📄 Compilando reporte en PDF...'), backgroundColor: Colors.blueGrey),
     );
   }
-
   Widget _buildCardMetrica(String titulo, String valor, IconData icono, Color color) {
     return Expanded(
       child: Container(
@@ -175,7 +173,6 @@ class _AdminPageState extends State<AdminPage> {
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
             ),
             SizedBox(width: 12),
-            // El componente aislado evita que la pantalla parpadee por segundo
             RelojDigitalIndependiente(),
           ],
         ),
@@ -198,7 +195,6 @@ class _AdminPageState extends State<AdminPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // FILA DE METRICAS RESPONSIVA
             Row(
               children: [
                 _buildCardMetrica('PRESENTES', '12', Icons.people, Colors.green),
@@ -209,15 +205,11 @@ class _AdminPageState extends State<AdminPage> {
               ],
             ),
             const SizedBox(height: 16),
-            
-            // CONTENEDOR RESPONSIVO ADAPTATIVO MÓVIL
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // Si la pantalla es angosta (Celular), apila verticalmente; si es ancha, horizontal
                   final bool esMovil = constraints.maxWidth < 750;
-                  
-                  final Widget formularioAlta = Container(
+                                    final Widget formularioAlta = Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -323,6 +315,7 @@ class _AdminPageState extends State<AdminPage> {
                                 final fServidor = DateTime.parse(registro['fecha_hora_servidor']);
                                 final horaFormateada = "${fServidor.hour.toString().padLeft(2, '0')}:${fServidor.minute.toString().padLeft(2, '0')}";
                                 final bool esRetardo = registro['estatus_asistencia'] == 'RETARDO';
+                                final String selfieUrl = registro['selfie_url'] ?? '';
 
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 8.0),
@@ -337,18 +330,25 @@ class _AdminPageState extends State<AdminPage> {
                                       children: [
                                         ClipRRect(
                                           borderRadius: BorderRadius.circular(6),
-                                          child: Image.network(
-                                            registro['selfie_url'] ?? '',
-                                            width: 40,
-                                            height: 40,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) => Container(
-                                              width: 40,
-                                              height: 40,
-                                              color: Colors.grey,
-                                              child: const Icon(Icons.person, color: Colors.grey, size: 20),
-                                            ),
-                                          ),
+                                          child: selfieUrl.isEmpty || !selfieUrl.startsWith('http')
+                                              ? Container(
+                                                  width: 40,
+                                                  height: 40,
+                                                  color: Colors.grey.shade300,
+                                                  child: const Icon(Icons.person, color: Colors.grey, size: 20),
+                                                )
+                                              : Image.network(
+                                                  selfieUrl,
+                                                  width: 40,
+                                                  height: 40,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (context, error, stackTrace) => Container(
+                                                    width: 40,
+                                                    height: 40,
+                                                    color: Colors.grey.shade300,
+                                                    child: const Icon(Icons.person, color: Colors.grey, size: 20),
+                                                  ),
+                                                ),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
@@ -364,12 +364,16 @@ class _AdminPageState extends State<AdminPage> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                           decoration: BoxDecoration(
-                                            color: esRetardo ? Colors.amber : Colors.green,
+                                            color: esRetardo ? Colors.amber.withValues(alpha: 0.2) : Colors.green.withValues(alpha: 0.2),
                                             borderRadius: BorderRadius.circular(12),
                                           ),
                                           child: Text(
                                             registro['estatus_asistencia'] ?? 'PROCESANDO',
-                                            style: TextStyle(fontWeight: FontWeight.bold, color: esRetardo ? Colors.amber : Colors.green, fontSize: 10),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold, 
+                                              color: esRetardo ? Colors.amber.shade900 : Colors.green.shade900, 
+                                              fontSize: 10
+                                            ),
                                           ),
                                         ),
                                       ],

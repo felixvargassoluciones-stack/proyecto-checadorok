@@ -102,6 +102,7 @@ class _KioscoPageState extends State<KioscoPage> {
       final String empleadoUuid = empleadoData['id'].toString();
       final String nombreTrabajador = empleadoData['nombre_completo'] ?? "Empleado";
       final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
+      // CORRECCIÓN DE CORS: Se cambia 'https://supabase.co' por un string vacío ''
       await SupabaseService.client.from('registros_asistencia').insert({
         'empleado_id': empleadoUuid,
         'sucursal_id': sucursalUuid,
@@ -109,7 +110,7 @@ class _KioscoPageState extends State<KioscoPage> {
         'fecha_hora_servidor': ahora.toIso8601String(),
         'dispositivo_info': 'Kiosco Web (Tablet/Móvil Responsivo)',
         'estatus_asistencia': 'TURNO_NO_PROGRAMADO',
-        'selfie_url': 'https://supabase.co',
+        'selfie_url': '', 
       });
 
       if (!mounted) return;
@@ -150,6 +151,7 @@ class _KioscoPageState extends State<KioscoPage> {
     });
     _apagarCamara();
   }
+
   void _solicitarConfirmacionMarcaje(String tipoEvento) {
     showDialog(
       context: context,
@@ -174,7 +176,6 @@ class _KioscoPageState extends State<KioscoPage> {
       },
     );
   }
-
   void _mostrarDialogoExito({required String nombreEmpleado, required String tipoEvento}) {
     final ahora = DateTime.now();
     final horaChecado = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')}";
