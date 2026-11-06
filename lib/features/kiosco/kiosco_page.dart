@@ -89,8 +89,8 @@ class _KioscoPageState extends State<KioscoPage> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
               onPressed: () {
-                Navigator.of(context).pop(); // Cierra este diálogo
-                _procesarMarcajeAsistencia(tipoEvento); // Ejecuta el registro real
+                Navigator.of(context).pop();
+                _procesarMarcajeAsistencia(tipoEvento);
               },
               child: const Text('Sí, Registrar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
@@ -200,7 +200,6 @@ class _KioscoPageState extends State<KioscoPage> {
     setState(() => _estaProcesando = true);
     
     try {
-      // Simulación exitosa integrada del sistema
       final String nombreTrabajador = "Juan Pérez Modesto";
 
       _mostrarDialogoExito(
@@ -237,7 +236,7 @@ class _KioscoPageState extends State<KioscoPage> {
 
     return GridView.builder(
       shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(), // El scroll lo maneja el padre contenedor
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: botones.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
@@ -285,20 +284,19 @@ class _KioscoPageState extends State<KioscoPage> {
     );
   }
   Widget _buildBotonIncidencia(String titulo, Color color, String tipo) {
-    return Expanded(
+    return SizedBox(
+      width: double.infinity, // Hace que el botón ocupe todo el ancho disponible
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(vertical: 18), // Botones más altos y cómodos
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 2,
         ),
-        // Vincula a la nueva ventana de confirmación previa antes de guardar en la DB
         onPressed: _pinActual.length < 4 ? null : () => _solicitarConfirmacionMarcaje(tipo),
         child: Text(
           titulo,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
         ),
       ),
     );
@@ -314,10 +312,10 @@ class _KioscoPageState extends State<KioscoPage> {
                 builder: (context, constraints) {
                   return Column(
                     children: [
-                      _buildSeccionVisual(), // Bloque superior fijo (No se mueve con el scroll)
+                      _buildSeccionVisual(), // Sección de la cámara fija arriba
                       Expanded(
                         child: SingleChildScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(), // Scroll firme y elástico
+                          physics: const AlwaysScrollableScrollPhysics(),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
                             child: Column(
@@ -340,19 +338,18 @@ class _KioscoPageState extends State<KioscoPage> {
                                 ),
                                 const SizedBox(height: 16),
                                 _buildTecladoNumerico(),
-                                const SizedBox(height: 20),
+                                const SizedBox(height: 24),
                                 
-                                // GRID/ROW INFERIOR: Corregido con los 4 botones requeridos
-                                Row(
+                                // BOTONERA CORREGIDA: Apilada en formato vertical uno debajo del otro
+                                Column(
                                   children: [
-                                    _buildBotonIncidencia('-> ENTRADA', Colors.green[700]!, 'ENTRADA'),
-                                    const SizedBox(width: 8),
-                                    _buildBotonIncidencia('SALIDA COMER', Colors.amber[700]!, 'SALIDA A COMER'),
-                                    const SizedBox(width: 8),
-                                    _buildBotonIncidencia('REGRESO COMER', Colors.blue[700]!, 'REGRESO DE COMER'),
-                                    const SizedBox(width: 8),
-                                    // NUEVO BOTÓN: Agregado el evento definitivo de Salida
-                                    _buildBotonIncidencia('-> SALIDA', Colors.red[700]!, 'SALIDA FIN DE TURNO'),
+                                    _buildBotonIncidencia('-> ENTRADA', const Color(0xFF2E7D32), 'ENTRADA'),
+                                    const SizedBox(height: 12),
+                                    _buildBotonIncidencia('SALIDA COMER', const Color(0xFFE65100), 'SALIDA A COMER'),
+                                    const SizedBox(height: 12),
+                                    _buildBotonIncidencia('REGRESO COMER', const Color(0xFF1565C0), 'REGRESO DE COMER'),
+                                    const SizedBox(height: 12),
+                                    _buildBotonIncidencia('-> SALIDA', const Color(0xFFC62828), 'SALIDA FIN DE TURNO'),
                                   ],
                                 ),
                               ],
