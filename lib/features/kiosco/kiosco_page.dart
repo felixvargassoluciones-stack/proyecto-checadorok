@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../../core/supabase_service.dart';
 
-
 class KioscoPage extends StatefulWidget {
   const KioscoPage({super.key});
 
@@ -19,8 +18,6 @@ class _KioscoPageState extends State<KioscoPage> {
   String _pinActual = "";
   Timer? _relojTimer;
   String _horaDigital = "00:00:00";
-  final List<Map<String, String>> _historialPruebas = [];
-
   @override
   void initState() {
     super.initState();
@@ -34,6 +31,7 @@ class _KioscoPageState extends State<KioscoPage> {
     _cameraController?.dispose();
     super.dispose();
   }
+
   void _iniciarReloj() {
     _relojTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       final ahora = DateTime.now();
@@ -44,7 +42,6 @@ class _KioscoPageState extends State<KioscoPage> {
       }
     });
   }
-
   Future<void> _inicializarCamaraFrontal() async {
     if (_cameraController != null || _inicializandoCamara) return;
     setState(() => _inicializandoCamara = true);
@@ -55,7 +52,11 @@ class _KioscoPageState extends State<KioscoPage> {
         (camara) => camara.lensDirection == CameraLensDirection.front,
         orElse: () => camaras.first,
       );
-      _cameraController = CameraController(camaraFrontal, ResolutionPreset.medium, enableAudio: false);
+      _cameraController = CameraController(
+        camaraFrontal, 
+        ResolutionPreset.medium, 
+        enableAudio: false
+      );
       await _cameraController!.initialize();
       if (mounted) setState(() {});
     } catch (e) {
@@ -72,20 +73,18 @@ class _KioscoPageState extends State<KioscoPage> {
       if (mounted) setState(() {});
     }
   }
-      Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
+  Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
     if (_pinActual.isEmpty || _estaProcesando) return;
 
     setState(() => _estaProcesando = true);
     
     try {
       final ahora = DateTime.now();
-      final horaFormateada = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')} hrs";
 
-      // 1. TRADUCCIÓN EXACTA: Buscamos al empleado usando los nombres de columna reales de tu captura
       final empleadoData = await SupabaseService.client
           .from('empleados')
-          .select('id, nombre_completo, sucursal_id') // Columnas reales verificadas
-          .eq('pin_acceso', _pinActual) // Nombre de columna real verificado
+          .select('id, nombre_completo, sucursal_id')
+          .eq('pin_acceso', _pinActual)
           .maybeSingle();
 
       if (empleadoData == null) {
@@ -102,30 +101,19 @@ class _KioscoPageState extends State<KioscoPage> {
 
       final String empleadoUuid = empleadoData['id'].toString();
       final String nombreTrabajador = empleadoData['nombre_completo'] ?? "Empleado";
-      // Si el empleado no tiene sucursal asignada en la tabla, usamos por defecto la Matriz de tu captura
       final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
-
-      // 2. INSERCIÓN REAL: Guardamos en registros_asistencia respetando todas las claves foráneas obligatorias
       await SupabaseService.client.from('registros_asistencia').insert({
         'empleado_id': empleadoUuid,
-        'sucursal_id': sucursalUuid, // Inyectamos el ID de la sucursal para que la base de datos lo acepte
+        'sucursal_id': sucursalUuid,
         'tipo_evento': tipoEvento,
-        'fecha_hora_servidor': ahora.toIso8601String(), // Estampa de tiempo exacta
+        'fecha_hora_servidor': ahora.toIso8601String(),
         'dispositivo_info': 'Kiosco Web (Tablet/Móvil Responsivo)',
-        'estatus_asistencia': 'TURNO_NO_PROGRAMADO', // Estatus por defecto inicial que maneja tu tabla
-        'selfie_url': 'https://supabase.co', // Tu ruta base de storage
+        'estatus_asistencia': 'TURNO_NO_PROGRAMADO',
+        'selfie_url': 'https://supabase.co',
       });
 
       if (!mounted) return;
 
-      setState(() {
-        _historialPruebas.insert(0, {
-          'evento': tipoEvento,
-          'hora': horaFormateada,
-        });
-      });
-
-      // Muestra el nombre real del empleado en letras grandes
       _mostrarDialogoExito(
         nombreEmpleado: nombreTrabajador,
         tipoEvento: tipoEvento,
@@ -144,9 +132,6 @@ class _KioscoPageState extends State<KioscoPage> {
       }
     }
   }
-
-
-
   void _agregarDigito(String digito) {
     if (_pinActual.length >= 4) return;
     setState(() {
@@ -214,48 +199,6 @@ class _KioscoPageState extends State<KioscoPage> {
       },
     );
   }
-  void _mostrarHistorialUsuario() {
-    if (_pinActual.length < 4) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('📊 Tus Marcas de Hoy', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
-              const SizedBox(height: 15),
-              _historialPruebas.isEmpty
-                  ? const Padding(padding: EdgeInsets.symmetric(vertical: 20.0), child: Center(child: Text('No tienes registros guardados.', style: TextStyle(fontSize: 16, color: Colors.grey))))
-                  : Container(
-                      constraints: const BoxConstraints(maxHeight: 250),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: _historialPruebas.length,
-                        itemBuilder: (context, index) {
-                          final item = _historialPruebas[index];
-                          final String ev = item['evento'] ?? 'MARCAJE';
-                          IconData icono = Icons.alarm; Color colorIcono = Colors.teal;
-                          if (ev.contains('ENTRADA')) { icono = Icons.login; colorIcono = Colors.green; }
-                          if (ev.contains('SALIDA')) { icono = Icons.logout; colorIcono = Colors.red; }
-                          if (ev.contains('COMER')) { icono = Icons.restaurant; colorIcono = Colors.amber; }
-                          return Column(children: [ListTile(leading: Icon(icono, color: colorIcono, size: 28), title: Text('$ev REGISTRADA', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)), trailing: Text(item['hora'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blueGrey))), if (index < _historialPruebas.length - 1) const Divider()]);
-                        },
-                      ),
-                    ),
-              const SizedBox(height: 15),
-              Center(child: TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar Historial', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.teal))))
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildSeccionVisual() {
     return Container(
       color: const Color(0xFF0D5C46), width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
@@ -270,7 +213,6 @@ class _KioscoPageState extends State<KioscoPage> {
       ]),
     );
   }
-
   Widget _buildTecladoNumerico() {
     final List<String> botones = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'];
     return GridView.builder(
@@ -294,7 +236,6 @@ class _KioscoPageState extends State<KioscoPage> {
   Widget _buildBotonIncidencia(String titulo, Color color, String tipo) {
     return SizedBox(width: double.infinity, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: color, padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 2), onPressed: _pinActual.length < 4 ? null : () => _solicitarConfirmacionMarcaje(tipo), child: Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5))));
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -305,7 +246,7 @@ class _KioscoPageState extends State<KioscoPage> {
             : LayoutBuilder(builder: (context, constraints) {
                 return Column(children: [
                   _buildSeccionVisual(),
-                  Expanded(child: SingleChildScrollView(physics: const AlwaysScrollableScrollPhysics(), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0), child: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: _pinController, readOnly: true, obscureText: true, textAlign: TextAlign.center, style: const TextStyle(fontSize: 28, letterSpacing: 16, fontWeight: FontWeight.bold), decoration: InputDecoration(hintText: '••••', hintStyle: const TextStyle(color: Colors.black26, letterSpacing: 16), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(vertical: 12))), const SizedBox(height: 16), _buildTecladoNumerico(), const SizedBox(height: 24), Column(children: [_buildBotonIncidencia('-> ENTRADA', const Color(0xFF2E7D32), 'ENTRADA'), const SizedBox(height: 12), _buildBotonIncidencia('SALIDA COMER', const Color(0xFFE65100), 'SALIDA A COMER'), const SizedBox(height: 12), _buildBotonIncidencia('REGRESO COMER', const Color(0xFF1565C0), 'REGRESO DE COMER'), const SizedBox(height: 12), _buildBotonIncidencia('-> SALIDA', const Color(0xFFC62828), 'SALIDA FIN DE TURNO'), const SizedBox(height: 15), OutlinedButton.icon(style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 50), side: const BorderSide(color: Colors.teal), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: _pinActual.length < 4 ? null : _mostrarHistorialUsuario, icon: const Icon(Icons.history, color: Colors.teal), label: const Text('Verificar mis registros de hoy', style: TextStyle(color: Colors.teal, fontSize: 15, fontWeight: FontWeight.bold)))])]))))
+                  Expanded(child: SingleChildScrollView(physics: const AlwaysScrollableScrollPhysics(), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0), child: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: _pinController, readOnly: true, obscureText: true, textAlign: TextAlign.center, style: const TextStyle(fontSize: 28, letterSpacing: 16, fontWeight: FontWeight.bold), decoration: InputDecoration(hintText: '••••', hintStyle: const TextStyle(color: Colors.black26, letterSpacing: 16), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(vertical: 12))), const SizedBox(height: 16), _buildTecladoNumerico(), const SizedBox(height: 24), Column(children: [_buildBotonIncidencia('-> ENTRADA', const Color(0xFF2E7D32), 'ENTRADA'), const SizedBox(height: 12), _buildBotonIncidencia('SALIDA COMER', const Color(0xFFE65100), 'SALIDA A COMER'), const SizedBox(height: 12), _buildBotonIncidencia('REGRESO COMER', const Color(0xFF1565C0), 'REGRESO DE COMER'), const SizedBox(height: 12), _buildBotonIncidencia('-> SALIDA', const Color(0xFFC62828), 'SALIDA FIN DE TURNO')])]))))
                 ]);
               }),
       ),

@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/supabase_service.dart';
 import 'features/kiosco/kiosco_page.dart';
 import 'features/admin/admin_page.dart';
-import 'features/auth/vinculacion_page.dart';
-
+import 'features/historial/historial_page.dart'; // Nueva importación saneada
 
 void main() async {
   // Asegura que el motor de Flutter esté listo antes de inicializar servicios
@@ -27,15 +26,15 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      // Definimos la ruta de arranque inicial de la aplicación
+      // Definimos la ruta de arranque inicial de la aplicación (Kiosco de taller)
       initialRoute: '/kiosco',
       
-      // Catálogo de rutas del ecosistema Web / Multi-Sucursal
-    routes: {
-  '/kiosco': (context) => const KioscoPage(),
-  '/admin': (context) => const AdminPage(),
-  '/vincular': (context) => const VinculacionPage(), // Nueva ruta para el celular personal
-},
+      // Catálogo oficial y estricto de las 3 rutas del ecosistema
+      routes: {
+        '/kiosco': (context) => const KioscoPage(),
+        '/historial': (context) => const HistorialPage(), // Pantalla de consulta del trabajador
+        '/admin': (context) => const AdminPage(),         // Panel de administración
+      },
     );
   }
 }
