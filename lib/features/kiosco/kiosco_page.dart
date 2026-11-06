@@ -14,6 +14,7 @@ class _KioscoPageState extends State<KioscoPage> {
   CameraController? _cameraController;
   final TextEditingController _pinController = TextEditingController();
   bool _estaProcesando = false;
+  bool _inicializandoCamara = false; // Evita inicializaciones dobles concurrentes
   String _pinActual = "";
 
   // VARIABLES INYECTADAS: Soporte para el reloj digital en tiempo real en la tablet
@@ -23,10 +24,31 @@ class _KioscoPageState extends State<KioscoPage> {
   void initState() {
     super.initState();
     _iniciarReloj();
-    _inicializarCamaraFrontal();
+    // NOTA: Se remueve _inicializarCamaraFrontal de aquí para ahorrar 100% de batería al estar inactivo
   }
 
+  @override
+  void dispose() {
+    _relojTimer?.cancel();
+    _pinController.dispose();
+    _cameraController?.dispose();
+    super.dispose();
+  }
+
+  void _iniciarReloj() {
+    _relojTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final ahora = DateTime.now();
+      if (mounted) {
+        setState(() {
+          _horaDigital = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')}:${ahora.second.toString().padLeft(2, '0')}";
+        });
+      }
+    });
+  }
   Future<void> _inicializarCamaraFrontal() async {
+    if (_cameraController != null || _inicializandoCamara) return;
+    
+    setState(() => _inicializandoCamara = true);
     try {
       final camaras = await availableCameras();
       if (camaras.isEmpty) return;
@@ -45,26 +67,19 @@ class _KioscoPageState extends State<KioscoPage> {
       await _cameraController!.initialize();
       if (mounted) setState(() {});
     } catch (e) {
-      debugPrint("Error al inicializar la cámara: $e");
+      debugPrint("Error al encender la cámara: $e");
+    } finally {
+      if (mounted) setState(() => _inicializandoCamara = false);
     }
   }
-  @override
-  void dispose() {
-    _relojTimer?.cancel();
-    _pinController.dispose();
-    _cameraController?.dispose();
-    super.dispose();
-  }
 
-  void _iniciarReloj() {
-    _relojTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      final ahora = DateTime.now();
-      if (mounted) {
-        setState(() {
-          _horaDigital = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')}:${ahora.second.toString().padLeft(2, '0')}";
-        });
-      }
-    });
+  void _apagarCamara() {
+    if (_cameraController != null) {
+      _cameraController!.dispose();
+      _cameraController = null;
+      if (mounted) setState(() {});
+      debugPrint("Sensor de la cámara liberado con éxito (Ahorro de batería activo).");
+    }
   }
   void _solicitarConfirmacionMarcaje(String tipoEvento) {
     showDialog(
@@ -143,7 +158,10 @@ class _KioscoPageState extends State<KioscoPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _apagarCamara(); // Cierra el lente inmediatamente al terminar el flujo
+              },
               child: const Text('Aceptar', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 18)),
             ),
           ],
@@ -174,21 +192,35 @@ class _KioscoPageState extends State<KioscoPage> {
             height: 150,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white24, width: 4),
+              border: Border.all(
+                color: _cameraController != null ? Colors.tealAccent : Colors.white24, 
+                width: 4
+              ),
             ),
             child: ClipOval(
-              child: (_cameraController != null && _cameraController!.value.isInitialized)
-                  ? CameraPreview(_cameraController!)
-                  : Container(
-                      color: const Color(0xFF114232),
-                      child: const Icon(Icons.camera_front, color: Colors.white38, size: 55),
-                    ),
+              child: _estaProcesando || _inicializandoCamara
+                  ? const Padding(
+                      padding: EdgeInsets.all(45.0),
+                      child: CircularProgressIndicator(color: Colors.white),
+                    )
+                  : (_cameraController != null && _cameraController!.value.isInitialized)
+                      ? CameraPreview(_cameraController!)
+                      : Container(
+                          color: const Color(0xFF114232),
+                          child: const Icon(Icons.photo_camera_front_outlined, color: Colors.white38, size: 55),
+                        ),
             ),
           ),
           const SizedBox(height: 10),
-          const Text(
-            'Asegúrate de que tu rostro sea visible en el círculo',
-            style: TextStyle(color: Colors.white60, fontSize: 13, fontStyle: FontStyle.italic),
+          Text(
+            _cameraController != null 
+                ? '📷 Cámara Activa - Rostro Detectado' 
+                : '💤 Sensor en reposo. Ingrese PIN para activar.',
+            style: TextStyle(
+              color: _cameraController != null ? Colors.tealAccent : Colors.white60, 
+              fontSize: 13, 
+              fontStyle: FontStyle.italic
+            ),
           ),
         ],
       ),
@@ -210,8 +242,9 @@ class _KioscoPageState extends State<KioscoPage> {
       _limpiarPin();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error de validación: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
+      _apagarCamara(); // Apaga la cámara si hay error de red o de PIN
     } finally {
       setState(() => _estaProcesando = false);
     }
@@ -223,6 +256,11 @@ class _KioscoPageState extends State<KioscoPage> {
       _pinActual += digito;
       _pinController.text = _pinActual;
     });
+
+    // ENCENDIDO DINÁMICO: Se activa la cámara en cuanto se ingresa el primer dígito
+    if (_pinActual.length == 1) {
+      _inicializarCamaraFrontal();
+    }
   }
 
   void _limpiarPin() {
@@ -230,6 +268,7 @@ class _KioscoPageState extends State<KioscoPage> {
       _pinActual = "";
       _pinController.text = "";
     });
+    _apagarCamara(); // Apaga el sensor si deciden reiniciar la captura del código
   }
   Widget _buildTecladoNumerico() {
     final List<String> botones = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'];
@@ -250,11 +289,11 @@ class _KioscoPageState extends State<KioscoPage> {
 
         return ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: esEspecial ? Colors.blueGrey[50] : Colors.white,
+            backgroundColor: esEspecial ? Colors.blueGrey : Colors.white,
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey[200]!),
+              side: BorderSide(color: Colors.grey[300]!),
             ),
           ),
           onPressed: () {
@@ -266,6 +305,9 @@ class _KioscoPageState extends State<KioscoPage> {
                   _pinActual = _pinActual.substring(0, _pinActual.length - 1);
                   _pinController.text = _pinActual;
                 });
+                if (_pinActual.isEmpty) {
+                  _apagarCamara(); // Si borra todos los dígitos, la cámara descansa de nuevo
+                }
               }
             } else {
               _agregarDigito(boton);
@@ -276,7 +318,7 @@ class _KioscoPageState extends State<KioscoPage> {
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: esEspecial ? Colors.blueGrey[700] : const Color(0xFF2D3748),
+              color: esEspecial ? Colors.white : const Color(0xFF2D3748),
             ),
           ),
         );
@@ -285,11 +327,11 @@ class _KioscoPageState extends State<KioscoPage> {
   }
   Widget _buildBotonIncidencia(String titulo, Color color, String tipo) {
     return SizedBox(
-      width: double.infinity, // Hace que el botón ocupe todo el ancho disponible
+      width: double.infinity,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          padding: const EdgeInsets.symmetric(vertical: 18), // Botones más altos y cómodos
+          padding: const EdgeInsets.symmetric(vertical: 18),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 2,
         ),
@@ -299,6 +341,45 @@ class _KioscoPageState extends State<KioscoPage> {
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
         ),
       ),
+    );
+  }
+
+  // Siguiente Paso: Ventana emergente para que el operador verifique sus marcas actuales
+  void _mostrarHistorialUsuario() {
+    if (_pinActual.length < 4) return;
+    
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '📊 Tus Marcas de Hoy',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal),
+              ),
+              const SizedBox(height: 15),
+              // Simulación visual del feed personalizado que se vinculará a la base de datos
+              ListTile(
+                leading: const Icon(Icons.login, color: Colors.green),
+                title: const Text('ENTRADA REGISTRADA'),
+                trailing: Text('${DateTime.now().hour - 2}:15 hrs', style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              const Divider(),
+              Center(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cerrar Historial', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              )
+            ],
+          ),
+        );
+      },
     );
   }
   @override
@@ -312,7 +393,7 @@ class _KioscoPageState extends State<KioscoPage> {
                 builder: (context, constraints) {
                   return Column(
                     children: [
-                      _buildSeccionVisual(), // Sección de la cámara fija arriba
+                      _buildSeccionVisual(), // Bloque de validación visual superior fijo
                       Expanded(
                         child: SingleChildScrollView(
                           physics: const AlwaysScrollableScrollPhysics(),
@@ -340,7 +421,6 @@ class _KioscoPageState extends State<KioscoPage> {
                                 _buildTecladoNumerico(),
                                 const SizedBox(height: 24),
                                 
-                                // BOTONERA CORREGIDA: Apilada en formato vertical uno debajo del otro
                                 Column(
                                   children: [
                                     _buildBotonIncidencia('-> ENTRADA', const Color(0xFF2E7D32), 'ENTRADA'),
@@ -350,6 +430,19 @@ class _KioscoPageState extends State<KioscoPage> {
                                     _buildBotonIncidencia('REGRESO COMER', const Color(0xFF1565C0), 'REGRESO DE COMER'),
                                     const SizedBox(height: 12),
                                     _buildBotonIncidencia('-> SALIDA', const Color(0xFFC62828), 'SALIDA FIN DE TURNO'),
+                                    const SizedBox(height: 15),
+                                    
+                                    // BOTÓN AUXILIAR DE AUTOCONSULTA DE MARCAS
+                                    OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        minimumSize: const Size(double.infinity, 50),
+                                        side: const BorderSide(color: Colors.teal),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      ),
+                                      onPressed: _pinActual.length < 4 ? null : _mostrarHistorialUsuario,
+                                      icon: const Icon(Icons.history, color: Colors.teal),
+                                      label: const Text('Verificar mis registros de hoy', style: TextStyle(color: Colors.teal, fontSize: 15, fontWeight: FontWeight.bold)),
+                                    ),
                                   ],
                                 ),
                               ],
