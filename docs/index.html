@@ -43,5 +43,19 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script src="flutter_bootstrap.js" async></script>
+
+<script>
+  // Función nativa para solicitar permisos de notificación sin cargar librerías en Flutter
+  window.solicitarPermisoWebPush = function() {
+    if (!('Notification' in window)) {
+      return Promise.resolve('not_supported');
+    }
+    return Notification.requestPermission();
+  };
+</script>
+
+
+
+
 </body>
 </html>

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'core/supabase_service.dart';
 import 'features/kiosco/kiosco_page.dart';
 import 'features/admin/admin_page.dart';
+import 'features/auth/vinculacion_page.dart';
+
 
 void main() async {
   // Asegura que el motor de Flutter esté listo antes de inicializar servicios
@@ -29,10 +31,11 @@ class MyApp extends StatelessWidget {
       initialRoute: '/kiosco',
       
       // Catálogo de rutas del ecosistema Web / Multi-Sucursal
-      routes: {
-        '/kiosco': (context) => const KioscoPage(),
-        '/admin': (context) => const AdminPage(),
-      },
+    routes: {
+  '/kiosco': (context) => const KioscoPage(),
+  '/admin': (context) => const AdminPage(),
+  '/vincular': (context) => const VinculacionPage(), // Nueva ruta para el celular personal
+},
     );
   }
 }
