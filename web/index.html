@@ -45,14 +45,21 @@
   <script src="flutter_bootstrap.js" async></script>
 
 <script>
-  // Función nativa para solicitar permisos de notificación sin cargar librerías en Flutter
   window.solicitarPermisoWebPush = function() {
-    if (!('Notification' in window)) {
-      return Promise.resolve('not_supported');
-    }
+    if (!('Notification' in window)) return Promise.resolve('not_supported');
     return Notification.requestPermission();
   };
+
+  // NUEVA FUNCIÓN INTERACTIVA COMPATIBLE CON WASM
+  window.solicitarNotificacionNativaFlotante = function(titulo, cuerpo) {
+    if (Notification.permission === 'granted') {
+      new Notification(titulo, { body: cuerpo });
+    }
+  };
 </script>
+
+
+
 
 
 

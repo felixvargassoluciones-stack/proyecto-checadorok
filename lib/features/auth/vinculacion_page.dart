@@ -1,10 +1,15 @@
-import 'dart:js_interop'; // Interoperabilidad moderna estándar de Flutter
+import 'dart:async';
+import 'dart:js_interop';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // Soluciona los errores de RealtimeChannel, PostgresChangeEvent, etc.
 import '../../core/supabase_service.dart';
 
-// Definición externa de la función que guardamos en el index.html
+// Interoperabilidad nativa moderna inmune a errores de WASM en Flutter Web
 @JS('solicitarPermisoWebPush')
 external JSPromise<JSString> solicitarPermisoWebPushNativo();
+
+@JS('window.solicitarNotificacionNativaFlotante')
+external void lanzarAlertaNativaVisual(JSString titulo, JSString cuerpo);
 
 class VinculacionPage extends StatefulWidget {
   const VinculacionPage({super.key});
@@ -17,11 +22,52 @@ class _VinculacionPageState extends State<VinculacionPage> {
   final TextEditingController _pinController = TextEditingController();
   bool _procesando = false;
   String _estadoNotificacion = "Desconectado";
+  
+  RealtimeChannel? _canalAsistencia;
 
   @override
   void dispose() {
     _pinController.dispose();
+    _desconectarCanalRealtime();
     super.dispose();
+  }
+
+  void _desconectarCanalRealtime() {
+    if (_canalAsistencia != null) {
+      SupabaseService.client.removeChannel(_canalAsistencia!);
+    }
+  }
+
+  void _escucharMarcajesEnTiempoReal(String pin) {
+    _desconectarCanalRealtime();
+
+    _canalAsistencia = SupabaseService.client
+        .channel('notificaciones_empleado_$pin')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'registros_asistencia',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'empleado_pin',
+            value: pin,
+          ),
+          callback: (payload) {
+            final record = payload.newRecord;
+            final String tipoEvento = record['tipo_evento'] ?? 'MARCAJE';
+            
+            final ahora = DateTime.now();
+            final String horaChecado = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')}";
+
+            // Dispara la ventana flotante nativa sin usar dart:js_util
+            lanzarAlertaNativaVisual(
+              "⏱️ Sistema Checador".toJS, 
+              "Hola, se registró tu $tipoEvento con éxito a las $horaChecado hrs.".toJS
+            );
+          },
+        );
+
+    _canalAsistencia!.subscribe();
   }
 
   Future<void> _solicitarPermisosYEnviarToken() async {
@@ -34,36 +80,24 @@ class _VinculacionPageState extends State<VinculacionPage> {
     setState(() => _procesando = true);
 
     try {
-      // Invocamos la función del index.html y esperamos su respuesta como un Future de Dart común
       final respuestaJS = await solicitarPermisoWebPushNativo().toDart;
       final String estatus = respuestaJS.toDart.toString();
 
       if (estatus == 'granted') {
-        final String endpointSimulado = "https://googleapis.com";
-        final String authSimulado = "auth_key_segura_taller_gratis";
-        final String p256dhSimulado = "p256dh_llave_publica_comprobante";
+        _escucharMarcajesEnTiempoReal(pinIngresado);
 
-        await SupabaseService.client.from('tokens_notificaciones').upsert({
-          'empleado_pin': pinIngresado,
-          'endpoint': endpointSimulado,
-          'auth_key': authSimulado,
-          'p256dh_key': p256dhSimulado,
-        }, onConflict: 'endpoint');
-
-        if (mounted) {
-          setState(() {
-            _estadoNotificacion = "🔔 Alertas Activas en este Celular";
-          });
-          _mostrarMensaje("¡Suscripción Exitosa! Recibirás alertas.", Colors.green);
-          _pinController.clear();
-        }
+        setState(() {
+          _estadoNotificacion = "🔔 Alertas Activas en este Celular";
+        });
+        _mostrarMensaje("¡Celular Vinculado! Mantén la pestaña abierta en tu bolsillo.", Colors.green);
+        _pinController.clear();
       } else if (estatus == 'not_supported') {
         _mostrarMensaje("Tu navegador no soporta notificaciones", Colors.red);
       } else {
         _mostrarMensaje("Permiso de notificaciones denegado", Colors.red);
       }
     } catch (e) {
-      _mostrarMensaje("Error de emparejamiento: $e", Colors.red);
+      _mostrarMensaje("Error de vinculación: $e", Colors.red);
     } finally {
       if (mounted) setState(() => _procesando = false);
     }
