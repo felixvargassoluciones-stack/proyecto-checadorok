@@ -72,7 +72,7 @@ class _KioscoPageState extends State<KioscoPage> {
       if (mounted) setState(() {});
     }
   }
-  Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
+    Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
     if (_pinActual.isEmpty || _estaProcesando) return;
 
     setState(() => _estaProcesando = true);
@@ -81,17 +81,37 @@ class _KioscoPageState extends State<KioscoPage> {
       final ahora = DateTime.now();
       final horaFormateada = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')} hrs";
 
-      // ⚙️ CONEXIÓN REAL SENIOR: Insertamos la fila directamente en tu tabla de Supabase
-            // Tu inserción existente a Supabase
+      // 1. TRADUCCIÓN SENIOR: Buscamos el UUID del empleado usando el PIN de 4 dígitos que tecleó
+      final empleadoData = await SupabaseService.client
+          .from('empleados')
+          .select('id, nombre') // Extraemos su UUID y su Nombre real
+          .eq('pin', _pinActual) // Filtramos por el PIN ingresado
+          .maybeSingle();
+
+      if (empleadoData == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ PIN incorrecto. Trabajador no encontrado.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        _limpiarPin();
+        return;
+      }
+
+      final String empleadoUuid = empleadoData['id'].toString();
+      final String nombreTrabajador = empleadoData['nombre'] ?? "Empleado";
+
+      // 2. INSERCIÓN REAL: Guardamos en registros_asistencia usando la columna correcta 'empleado_id'
       await SupabaseService.client.from('registros_asistencia').insert({
-        'empleado_pin': _pinActual,
+        'empleado_id': empleadoUuid, // Inyectamos el UUID correcto que descubrimos en la captura
         'tipo_evento': tipoEvento,
-        'dispositivo_info': 'Kiosco Web Taller',
-        'estatus_asistencia': 'A TIEMPO',
-        'selfie_url': 'https://placeholder.com',
+        'dispositivo_info': 'Kiosco Web (Tablet/Móvil Responsivo)',
+        'estatus_asistencia': 'REGISTRO_NORMAL',
+        'selfie_url': 'https://placeholder.com', // Marcador temporal
       });
 
-      // CANDADO DE SEGURIDAD SENIOR: Evita que truene el BuildContext asíncrono
       if (!mounted) return;
 
       setState(() {
@@ -102,21 +122,24 @@ class _KioscoPageState extends State<KioscoPage> {
       });
 
       _mostrarDialogoExito(
-        nombreEmpleado: "PIN: $_pinActual",
+        nombreEmpleado: nombreTrabajador, // Ahora muestra su nombre real dinámico en vez del PIN
         tipoEvento: tipoEvento,
       );
 
-
       _limpiarPin();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error de conexión con Supabase: $e'), backgroundColor: Colors.red),
       );
       _apagarCamara();
     } finally {
-      setState(() => _estaProcesando = false);
+      if (mounted) {
+        setState(() => _estaProcesando = false);
+      }
     }
   }
+
 
   void _agregarDigito(String digito) {
     if (_pinActual.length >= 4) return;
