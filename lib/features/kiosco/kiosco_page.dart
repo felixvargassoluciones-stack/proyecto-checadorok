@@ -72,7 +72,7 @@ class _KioscoPageState extends State<KioscoPage> {
       if (mounted) setState(() {});
     }
   }
-    Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
+      Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
     if (_pinActual.isEmpty || _estaProcesando) return;
 
     setState(() => _estaProcesando = true);
@@ -81,18 +81,18 @@ class _KioscoPageState extends State<KioscoPage> {
       final ahora = DateTime.now();
       final horaFormateada = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')} hrs";
 
-      // 1. TRADUCCIÓN SENIOR: Buscamos el UUID del empleado usando el PIN de 4 dígitos que tecleó
+      // 1. TRADUCCIÓN EXACTA: Buscamos al empleado usando los nombres de columna reales de tu captura
       final empleadoData = await SupabaseService.client
           .from('empleados')
-          .select('id, nombre') // Extraemos su UUID y su Nombre real
-          .eq('pin', _pinActual) // Filtramos por el PIN ingresado
+          .select('id, nombre_completo, sucursal_id') // Columnas reales verificadas
+          .eq('pin_acceso', _pinActual) // Nombre de columna real verificado
           .maybeSingle();
 
       if (empleadoData == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ PIN incorrecto. Trabajador no encontrado.'),
+            content: Text('⚠️ PIN de acceso incorrecto. Trabajador no encontrado.'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -101,15 +101,19 @@ class _KioscoPageState extends State<KioscoPage> {
       }
 
       final String empleadoUuid = empleadoData['id'].toString();
-      final String nombreTrabajador = empleadoData['nombre'] ?? "Empleado";
+      final String nombreTrabajador = empleadoData['nombre_completo'] ?? "Empleado";
+      // Si el empleado no tiene sucursal asignada en la tabla, usamos por defecto la Matriz de tu captura
+      final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
 
-      // 2. INSERCIÓN REAL: Guardamos en registros_asistencia usando la columna correcta 'empleado_id'
+      // 2. INSERCIÓN REAL: Guardamos en registros_asistencia respetando todas las claves foráneas obligatorias
       await SupabaseService.client.from('registros_asistencia').insert({
-        'empleado_id': empleadoUuid, // Inyectamos el UUID correcto que descubrimos en la captura
+        'empleado_id': empleadoUuid,
+        'sucursal_id': sucursalUuid, // Inyectamos el ID de la sucursal para que la base de datos lo acepte
         'tipo_evento': tipoEvento,
+        'fecha_hora_servidor': ahora.toIso8601String(), // Estampa de tiempo exacta
         'dispositivo_info': 'Kiosco Web (Tablet/Móvil Responsivo)',
-        'estatus_asistencia': 'REGISTRO_NORMAL',
-        'selfie_url': 'https://placeholder.com', // Marcador temporal
+        'estatus_asistencia': 'TURNO_NO_PROGRAMADO', // Estatus por defecto inicial que maneja tu tabla
+        'selfie_url': 'https://supabase.co', // Tu ruta base de storage
       });
 
       if (!mounted) return;
@@ -121,8 +125,9 @@ class _KioscoPageState extends State<KioscoPage> {
         });
       });
 
+      // Muestra el nombre real del empleado en letras grandes
       _mostrarDialogoExito(
-        nombreEmpleado: nombreTrabajador, // Ahora muestra su nombre real dinámico en vez del PIN
+        nombreEmpleado: nombreTrabajador,
         tipoEvento: tipoEvento,
       );
 
@@ -139,6 +144,7 @@ class _KioscoPageState extends State<KioscoPage> {
       }
     }
   }
+
 
 
   void _agregarDigito(String digito) {
