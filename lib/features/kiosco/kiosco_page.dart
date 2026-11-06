@@ -14,8 +14,11 @@ class _KioscoPageState extends State<KioscoPage> {
   CameraController? _cameraController;
   final TextEditingController _pinController = TextEditingController();
   bool _estaProcesando = false;
-  bool _inicializandoCamara = false; // Evita inicializaciones dobles concurrentes
+  bool _inicializandoCamara = false;
   String _pinActual = "";
+
+  // NUEVO ARREGLO DINÁMICO: Guarda en memoria los múltiples chequeos realizados en la sesión de pruebas
+  final List<Map<String, String>> _historialPruebas = [];
 
   // VARIABLES INYECTADAS: Soporte para el reloj digital en tiempo real en la tablet
   Timer? _relojTimer;
@@ -24,7 +27,6 @@ class _KioscoPageState extends State<KioscoPage> {
   void initState() {
     super.initState();
     _iniciarReloj();
-    // NOTA: Se remueve _inicializarCamaraFrontal de aquí para ahorrar 100% de batería al estar inactivo
   }
 
   @override
@@ -160,7 +162,7 @@ class _KioscoPageState extends State<KioscoPage> {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                _apagarCamara(); // Cierra el lente inmediatamente al terminar el flujo
+                _apagarCamara();
               },
               child: const Text('Aceptar', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 18)),
             ),
@@ -233,6 +235,16 @@ class _KioscoPageState extends State<KioscoPage> {
     
     try {
       final String nombreTrabajador = "Juan Pérez Modesto";
+      final ahora = DateTime.now();
+      final horaFormateada = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')} hrs";
+
+      // CORRECCIÓN CLAVE: Agrega dinámicamente cada nuevo marcaje al arreglo para que se listen múltiples renglones
+      setState(() {
+        _historialPruebas.insert(0, {
+          'evento': tipoEvento,
+          'hora': horaFormateada,
+        });
+      });
 
       _mostrarDialogoExito(
         nombreEmpleado: nombreTrabajador,
@@ -244,7 +256,7 @@ class _KioscoPageState extends State<KioscoPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
-      _apagarCamara(); // Apaga la cámara si hay error de red o de PIN
+      _apagarCamara();
     } finally {
       setState(() => _estaProcesando = false);
     }
@@ -257,7 +269,6 @@ class _KioscoPageState extends State<KioscoPage> {
       _pinController.text = _pinActual;
     });
 
-    // ENCENDIDO DINÁMICO: Se activa la cámara en cuanto se ingresa el primer dígito
     if (_pinActual.length == 1) {
       _inicializarCamaraFrontal();
     }
@@ -268,7 +279,7 @@ class _KioscoPageState extends State<KioscoPage> {
       _pinActual = "";
       _pinController.text = "";
     });
-    _apagarCamara(); // Apaga el sensor si deciden reiniciar la captura del código
+    _apagarCamara();
   }
   Widget _buildTecladoNumerico() {
     final List<String> botones = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'];
@@ -293,7 +304,8 @@ class _KioscoPageState extends State<KioscoPage> {
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey[300]!),
+              side: BorderSide(color: Colors.grey),
+
             ),
           ),
           onPressed: () {
@@ -306,7 +318,7 @@ class _KioscoPageState extends State<KioscoPage> {
                   _pinController.text = _pinActual;
                 });
                 if (_pinActual.isEmpty) {
-                  _apagarCamara(); // Si borra todos los dígitos, la cámara descansa de nuevo
+                  _apagarCamara();
                 }
               }
             } else {
@@ -344,12 +356,12 @@ class _KioscoPageState extends State<KioscoPage> {
     );
   }
 
-  // Siguiente Paso: Ventana emergente para que el operador verifique sus marcas actuales
   void _mostrarHistorialUsuario() {
     if (_pinActual.length < 4) return;
     
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true, // Permite ajustar el tamaño dinámicamente si hay muchos registros
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return Padding(
@@ -363,17 +375,49 @@ class _KioscoPageState extends State<KioscoPage> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal),
               ),
               const SizedBox(height: 15),
-              // Simulación visual del feed personalizado que se vinculará a la base de datos
-              ListTile(
-                leading: const Icon(Icons.login, color: Colors.green),
-                title: const Text('ENTRADA REGISTRADA'),
-                trailing: Text('${DateTime.now().hour - 2}:15 hrs', style: const TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              const Divider(),
+              
+              // EVALUACIÓN DE REGISTROS: Si está vacío, notifica al operador
+              _historialPruebas.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20.0),
+                      child: Center(
+                        child: Text('No tienes registros guardados en esta sesión.', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                      ),
+                    )
+                  : Container(
+                      constraints: const BoxConstraints(maxHeight: 250), // Evita desbordamiento si haces más de 5 marcas
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _historialPruebas.length,
+                        itemBuilder: (context, index) {
+                          final item = _historialPruebas[index];
+                          final String ev = item['evento'] ?? 'MARCAJE';
+                          
+                          // Cambia el icono y el color según el tipo de incidencia real
+                          IconData icono = Icons.alarm;
+                          Color colorIcono = Colors.teal;
+                          if (ev.contains('ENTRADA')) { icono = Icons.login; colorIcono = Colors.green; }
+                          if (ev.contains('SALIDA')) { icono = Icons.logout; colorIcono = Colors.red; }
+                          if (ev.contains('COMER')) { icono = Icons.restaurant; colorIcono = Colors.amber; }
+
+                          return Column(
+                            children: [
+                              ListTile(
+                                leading: Icon(icono, color: colorIcono, size: 28),
+                                title: Text('$ev REGISTRADA', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                trailing: Text(item['hora'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blueGrey)),
+                              ),
+                              if (index < _historialPruebas.length - 1) const Divider(),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+              const SizedBox(height: 15),
               Center(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cerrar Historial', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: const Text('Cerrar Historial', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.teal)),
                 ),
               )
             ],
@@ -393,7 +437,7 @@ class _KioscoPageState extends State<KioscoPage> {
                 builder: (context, constraints) {
                   return Column(
                     children: [
-                      _buildSeccionVisual(), // Bloque de validación visual superior fijo
+                      _buildSeccionVisual(),
                       Expanded(
                         child: SingleChildScrollView(
                           physics: const AlwaysScrollableScrollPhysics(),
@@ -432,7 +476,6 @@ class _KioscoPageState extends State<KioscoPage> {
                                     _buildBotonIncidencia('-> SALIDA', const Color(0xFFC62828), 'SALIDA FIN DE TURNO'),
                                     const SizedBox(height: 15),
                                     
-                                    // BOTÓN AUXILIAR DE AUTOCONSULTA DE MARCAS
                                     OutlinedButton.icon(
                                       style: OutlinedButton.styleFrom(
                                         minimumSize: const Size(double.infinity, 50),
