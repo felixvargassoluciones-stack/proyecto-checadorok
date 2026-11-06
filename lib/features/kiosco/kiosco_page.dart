@@ -2,8 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
-
-
 class KioscoPage extends StatefulWidget {
   const KioscoPage({super.key});
 
@@ -18,7 +16,7 @@ class _KioscoPageState extends State<KioscoPage> {
   bool _estaProcesando = false;
   String _pinActual = "";
 
-  // NUEVAS VARIABLES INYECTADAS: Soporte para el reloj digital en tiempo real en la tablet
+  // VARIABLES INYECTADAS: Soporte para el reloj digital en tiempo real en la tablet
   Timer? _relojTimer;
   String _horaDigital = "00:00:00";
   @override
@@ -33,7 +31,6 @@ class _KioscoPageState extends State<KioscoPage> {
       final camaras = await availableCameras();
       if (camaras.isEmpty) return;
 
-      // Localizamos la cámara frontal en el dispositivo
       final camaraFrontal = camaras.firstWhere(
         (camara) => camara.lensDirection == CameraLensDirection.front,
         orElse: () => camaras.first,
@@ -69,6 +66,39 @@ class _KioscoPageState extends State<KioscoPage> {
       }
     });
   }
+  void _solicitarConfirmacionMarcaje(String tipoEvento) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            '⚠️ Confirmar Registro',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, fontSize: 22),
+          ),
+          content: Text(
+            '¿Estás seguro de que deseas registrar tu $tipoEvento en este momento?',
+            style: const TextStyle(fontSize: 18, color: Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+              onPressed: () {
+                Navigator.of(context).pop(); // Cierra este diálogo
+                _procesarMarcajeAsistencia(tipoEvento); // Ejecuta el registro real
+              },
+              child: const Text('Sí, Registrar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ],
+        );
+      },
+    );
+  }
   void _mostrarDialogoExito({required String nombreEmpleado, required String tipoEvento}) {
     final ahora = DateTime.now();
     final horaChecado = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')}";
@@ -81,11 +111,11 @@ class _KioscoPageState extends State<KioscoPage> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.teal, size: 28),
-              SizedBox(width: 10),
+              Icon(Icons.check_circle, color: Colors.teal, size: 34),
+              SizedBox(width: 12),
               Text(
                 '¡Registro Exitoso!',
-                style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),
+                style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 24),
               ),
             ],
           ),
@@ -95,12 +125,12 @@ class _KioscoPageState extends State<KioscoPage> {
             children: [
               Text(
                 'Hola $nombreEmpleado,',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)),
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
               RichText(
                 text: TextSpan(
-                  style: const TextStyle(fontSize: 15, color: Colors.black87, height: 1.4),
+                  style: const TextStyle(fontSize: 18, color: Colors.black87, height: 1.5),
                   children: [
                     const TextSpan(text: 'se ha registrado tu '),
                     TextSpan(text: tipoEvento, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
@@ -114,7 +144,7 @@ class _KioscoPageState extends State<KioscoPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Aceptar', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 16)),
+              child: const Text('Aceptar', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 18)),
             ),
           ],
         );
@@ -123,25 +153,25 @@ class _KioscoPageState extends State<KioscoPage> {
   }
   Widget _buildSeccionVisual() {
     return Container(
-      color: const Color(0xFF0D5C46), // Color verde institucional de la bitácora
+      color: const Color(0xFF0D5C46),
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
             'VALIDACIÓN VISUAL',
             style: TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.5),
           ),
-          const SizedBox(height: 10),
-          // RELOJ EN VIVO: Inyectado con tipografía de alta visibilidad para talleres
+          const SizedBox(height: 8),
           Text(
             _horaDigital,
             style: const TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Container(
-            width: 160,
-            height: 160,
+            width: 150,
+            height: 150,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white24, width: 4),
@@ -155,7 +185,7 @@ class _KioscoPageState extends State<KioscoPage> {
                     ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           const Text(
             'Asegúrate de que tu rostro sea visible en el círculo',
             style: TextStyle(color: Colors.white60, fontSize: 13, fontStyle: FontStyle.italic),
@@ -170,10 +200,7 @@ class _KioscoPageState extends State<KioscoPage> {
     setState(() => _estaProcesando = true);
     
     try {
-      // Tu consulta real en Supabase (Se preserva su espacio operativo completo)
-      // final datosEmpleado = await SupabaseService.client.from('empleados').select().eq('pin', _pinActual).single();
-      
-      // Simulación exitosa del sistema en base a los registros en vivo del feed de selfies
+      // Simulación exitosa integrada del sistema
       final String nombreTrabajador = "Juan Pérez Modesto";
 
       _mostrarDialogoExito(
@@ -210,13 +237,13 @@ class _KioscoPageState extends State<KioscoPage> {
 
     return GridView.builder(
       shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+      physics: const NeverScrollableScrollPhysics(), // El scroll lo maneja el padre contenedor
       itemCount: botones.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        childAspectRatio: 1.4,
-        crossAxisSpacing: 14,
-        mainAxisSpacing: 14,
+        childAspectRatio: 1.5,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
       ),
       itemBuilder: (context, index) {
         final boton = botones[index];
@@ -262,15 +289,16 @@ class _KioscoPageState extends State<KioscoPage> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 2,
         ),
-        onPressed: _pinActual.length < 4 ? null : () => _procesarMarcajeAsistencia(tipo),
+        // Vincula a la nueva ventana de confirmación previa antes de guardar en la DB
+        onPressed: _pinActual.length < 4 ? null : () => _solicitarConfirmacionMarcaje(tipo),
         child: Text(
           titulo,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
     );
@@ -286,15 +314,15 @@ class _KioscoPageState extends State<KioscoPage> {
                 builder: (context, constraints) {
                   return Column(
                     children: [
-                      _buildSeccionVisual(), // Bloque superior estático de cámara
+                      _buildSeccionVisual(), // Bloque superior fijo (No se mueve con el scroll)
                       Expanded(
                         child: SingleChildScrollView(
-                          physics: const BouncingScrollPhysics(),
+                          physics: const AlwaysScrollableScrollPhysics(), // Scroll firme y elástico
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
                             child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Campo visualizador de asteriscos para el PIN seguro
                                 TextField(
                                   controller: _pinController,
                                   readOnly: true,
@@ -310,18 +338,21 @@ class _KioscoPageState extends State<KioscoPage> {
                                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
                                   ),
                                 ),
-                                const SizedBox(height: 20),
+                                const SizedBox(height: 16),
                                 _buildTecladoNumerico(),
-                                const SizedBox(height: 24),
+                                const SizedBox(height: 20),
                                 
-                                // Fila inferior adaptada para registrar Entradas y Salidas
+                                // GRID/ROW INFERIOR: Corregido con los 4 botones requeridos
                                 Row(
                                   children: [
                                     _buildBotonIncidencia('-> ENTRADA', Colors.green[700]!, 'ENTRADA'),
-                                    const SizedBox(width: 12),
+                                    const SizedBox(width: 8),
                                     _buildBotonIncidencia('SALIDA COMER', Colors.amber[700]!, 'SALIDA A COMER'),
-                                    const SizedBox(width: 12),
+                                    const SizedBox(width: 8),
                                     _buildBotonIncidencia('REGRESO COMER', Colors.blue[700]!, 'REGRESO DE COMER'),
+                                    const SizedBox(width: 8),
+                                    // NUEVO BOTÓN: Agregado el evento definitivo de Salida
+                                    _buildBotonIncidencia('-> SALIDA', Colors.red[700]!, 'SALIDA FIN DE TURNO'),
                                   ],
                                 ),
                               ],
