@@ -691,7 +691,41 @@ class _AdminPageState extends State<AdminPage> {
 
               // SECCIÓN CARGO / PUESTO CON CRUD COMPLETO
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('Cargo / Puesto de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              // SECCIÓN CARGO / PUESTO CON FILA DE BOTONES CRUD INTEGRADA
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+                children: [
+                  const Text('Cargo / Puesto de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  Row(
+                    children: [
+                      if (_puestoSeleccionadoUuid != null && !_crearNuevoPuestoManualmente) ...[
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 14, color: Colors.amber), 
+                          padding: EdgeInsets.zero, 
+                          constraints: const BoxConstraints(), 
+                          onPressed: _modificarPuestoDialog
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton(
+                          icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), 
+                          padding: EdgeInsets.zero, 
+                          constraints: const BoxConstraints(), 
+                          onPressed: _eliminarPuestoDialog
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      if (_puestosDisponibles.isNotEmpty && _empleadoIdEdicion == null) 
+                        TextButton.icon(
+                          style: TextButton.styleFrom(padding: EdgeInsets.zero), 
+                          onPressed: () => setState(() => _crearNuevoPuestoManualmente = !_crearNuevoPuestoManualmente), 
+                          icon: Icon(_crearNuevoPuestoManualmente ? Icons.list : Icons.add_circle_outline, size: 14, color: Colors.teal), 
+                          label: Text(_crearNuevoPuestoManualmente ? "Ver lista" : "Nuevo manual", style: const TextStyle(fontSize: 11, color: Colors.teal))
+                        ),
+                    ],
+                  )
+                ]
+              ),
+
                 Row(children: [
                   if (_puestoSeleccionadoUuid != null && !_crearNuevoPuestoManualmente) ...[
                     IconButton(icon: const Icon(Icons.edit, size: 14, color: Colors.amber), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _modificarPuestoDialog),
