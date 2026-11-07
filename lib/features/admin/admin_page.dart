@@ -72,7 +72,7 @@ class _AdminPageState extends State<AdminPage> {
 
   List<Map<String, dynamic>> _empresasDisponibles = [];
   List<Map<String, dynamic>> _sucursalesDisponibles = [];
-  List<Map<String, dynamic>> _empleadosRegistrados = []; // Para la tabla Excel
+  List<Map<String, dynamic>> _empleadosRegistrados = []; 
   
   String? _empresaSeleccionadaUuid;
   String? _sucursalSeleccionadaUuid;
@@ -82,8 +82,8 @@ class _AdminPageState extends State<AdminPage> {
   bool _crearNuevaSucursalManualmente = false;
   bool _crearNuevaEmpresaManualmente = false;
 
-  // CONTROL DE MENÚ LATERAL: 'INICIO', 'REGISTRO', 'MONITOREO'
   String _seccionActivaSidebar = 'INICIO';
+  String? _empleadoIdEdicion; // Pointer clave para controlar si editamos o insertamos
 
   @override
   void initState() {
@@ -108,20 +108,13 @@ class _AdminPageState extends State<AdminPage> {
           _empresasDisponibles = List<Map<String, dynamic>>.from(datosEmpresas);
           _sucursalesDisponibles = List<Map<String, dynamic>>.from(datosSucursales);
 
-          if (_empresasDisponibles.isNotEmpty) {
+          if (_empresasDisponibles.isNotEmpty && _empresaSeleccionadaUuid == null) {
             _empresaSeleccionadaUuid = _empresasDisponibles.first['id'].toString();
             _crearNuevaEmpresaManualmente = false;
-          } else {
-            _empresaSeleccionadaUuid = null;
-            _crearNuevaEmpresaManualmente = true;
           }
-
-          if (_sucursalesDisponibles.isNotEmpty) {
+          if (_sucursalesDisponibles.isNotEmpty && _sucursalSeleccionadaUuid == null) {
             _sucursalSeleccionadaUuid = _sucursalesDisponibles.first['id'].toString();
             _crearNuevaSucursalManualmente = false;
-          } else {
-            _sucursalSeleccionadaUuid = null;
-            _crearNuevaSucursalManualmente = true;
           }
         });
       }
@@ -134,7 +127,7 @@ class _AdminPageState extends State<AdminPage> {
     try {
       final datos = await SupabaseService.client
           .from('empleados')
-          .select('id, numero_empleado, nombre_completo, pin_acceso, rol, sucursal_id, sucursales(nombre)')
+          .select('id, numero_empleado, nombre_completo, pin_acceso, rol, sucursal_id, correo_electronico, sucursales(nombre)')
           .order('numero_empleado');
       if (mounted) {
         setState(() {
@@ -180,124 +173,123 @@ class _AdminPageState extends State<AdminPage> {
     setState(() => _guardandoEmpleado = true);
 
     try {
-      // 1. VALIDACIÓN PREVENTIVA DE DUPLICADOS EN FLUTTER (Evita error Postgres)
-      final existeNumero = await SupabaseService.client
-          .from('empleados')
-          .select('id')
-          .eq('numero_empleado', numeroEmpleado)
-          .maybeSingle();
-
-      if (existeNumero != null) {
-        throw 'El número de empleado/nómina ya está registrado en el sistema.';
+      // Validaciones anti-duplicados (solo aplican si el campo no pertenece al registro que estamos editando)
+      final existeNumero = await SupabaseService.client.from('empleados').select('id').eq('numero_empleado', numeroEmpleado).maybeSingle();
+      if (existeNumero != null && (_empleadoIdEdicion == null || existeNumero['id'].toString() != _empleadoIdEdicion)) {
+        throw 'El número de empleado/nómina ya está registrado.';
       }
 
       if (correo.isNotEmpty) {
-        final existeCorreo = await SupabaseService.client
-            .from('empleados')
-            .select('id')
-            .eq('correo_electronico', correo)
-            .maybeSingle();
-
-        if (existeCorreo != null) {
-          throw 'El correo electrónico ingresado ya está asignado a otro registro.';
+        final existeCorreo = await SupabaseService.client.from('empleados').select('id').eq('correo_electronico', correo).maybeSingle();
+        if (existeCorreo != null && (_empleadoIdEdicion == null || existeCorreo['id'].toString() != _empleadoIdEdicion)) {
+          throw 'El correo electrónico ya está asignado a otro registro.';
         }
       }
 
-      final existePin = await SupabaseService.client
-          .from('empleados')
-          .select('id')
-          .eq('pin_acceso', pin)
-          .maybeSingle();
-
-      if (existePin != null) {
-        throw 'El PIN de acceso ingresado ya está en uso. Por seguridad, asigna uno único.';
+      final existePin = await SupabaseService.client.from('empleados').select('id').eq('pin_acceso', pin).maybeSingle();
+      if (existePin != null && (_empleadoIdEdicion == null || existePin['id'].toString() != _empleadoIdEdicion)) {
+        throw 'El PIN de acceso ya está en uso por otro trabajador.';
       }
-      // 2. Crear Empresa si está en modo manual
+
+      // Crear Empresa manual
       if (_crearNuevaEmpresaManualmente) {
         final String nombreNuevaEmpresa = _nuevaEmpresaController.text.trim();
-        final nuevaEmpresaData = await SupabaseService.client
-            .from('empresas')
-            .insert({'nombre': nombreNuevaEmpresa})
-            .select('id')
-            .single();
+        final nuevaEmpresaData = await SupabaseService.client.from('empresas').insert({'nombre': nombreNuevaEmpresa}).select('id').single();
         empresaIdFinal = nuevaEmpresaData['id'].toString();
       }
-
       if (empresaIdFinal == null) throw 'No se determinó la empresa.';
 
-      // 3. Crear Sucursal si está en modo manual
+      // Crear Sucursal manual
       if (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente) {
         final String nombreNuevaSucursal = _nuevaSucursalController.text.trim();
-        final nuevaSucursalData = await SupabaseService.client
-            .from('sucursales')
-            .insert({
-              'nombre': nombreNuevaSucursal,
-              'empresa_id': empresaIdFinal,
-              'pin_kiosco': '0000',
-            })
-            .select('id')
-            .single();
+        final nuevaSucursalData = await SupabaseService.client.from('sucursales').insert({'nombre': nombreNuevaSucursal, 'empresa_id': empresaIdFinal, 'pin_kiosco': '0000'}).select('id').single();
         sucursalIdFinal = nuevaSucursalData['id'].toString();
       }
-
       if (sucursalIdFinal == null) throw 'No se determinó la sucursal.';
-
-      // 4. Inserción Limpia del Personal
-      await SupabaseService.client.from('empleados').insert({
+      final Map<String, dynamic> datosEmpleado = {
         'nombre_completo': nombre,
         'pin_acceso': pin,
         'numero_empleado': numeroEmpleado,
         'sucursal_id': sucursalIdFinal,
         'rol': _rolSeleccionado,
         'correo_electronico': correo.isEmpty ? null : correo,
-      });
+      };
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('🎉 ¡$nombre registrado con éxito como $_rolSeleccionado!'), backgroundColor: Colors.teal),
-      );
+      if (_empleadoIdEdicion == null) {
+        // Modo Registro
+        await SupabaseService.client.from('empleados').insert(datosEmpleado);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('🎉 ¡$nombre registrado como $_rolSeleccionado!'), backgroundColor: Colors.teal));
+      } else {
+        // Modo Edición / Actualización
+        await SupabaseService.client.from('empleados').update(datosEmpleado).eq('id', _empleadoIdEdicion!);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✏️ ¡Datos de $nombre actualizados con éxito!'), backgroundColor: Colors.amber.shade800));
+      }
 
-      _nombreController.clear();
-      _pinAltaController.clear();
-      _numeroEmpleadoController.clear();
-      _nuevaSucursalController.clear();
-      _nuevaEmpresaController.clear();
-      _correoController.clear();
-      
+      _cancelarEdicion();
       await _cargarEstructuraCorporativa();
       await _cargarListaEmpleadosExcel();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('⚠️ $e'), backgroundColor: Colors.orange.shade800, duration: const Duration(seconds: 4)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ $e'), backgroundColor: Colors.orange.shade800, duration: const Duration(seconds: 4)));
     } finally {
       if (mounted) setState(() => _guardandoEmpleado = false);
     }
   }
 
-  void _descargarExcel() {}
-  void _imprimirPDF() {}
-
-  Widget _buildCardMetrica(String titulo, String valor, IconData icono, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(titulo, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)), const SizedBox(height: 4), Text(valor, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)))]),
-            Icon(icono, size: 28, color: color),
-          ],
-        ),
+  Future<void> _eliminarEmpleado(String id, String nombre) async {
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 8), Text('¿Eliminar Personal?')]),
+        content: Text('¿Estás seguro de que deseas eliminar permanentemente a "$nombre"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(context, true), child: const Text('Sí, Eliminar', style: TextStyle(color: Colors.white))),
+        ],
       ),
     );
+    if (confirmar != true) return;
+    try {
+      await SupabaseService.client.from('empleados').delete().eq('id', id);
+     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('🗑️ El registro de "$nombre" ha sido eliminado.'), backgroundColor: Colors.red.shade800));
+
+      if (_empleadoIdEdicion == id) _cancelarEdicion();
+      await _cargarListaEmpleadosExcel();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al eliminar: $e'), backgroundColor: Colors.red));
+
+    }
+  }
+
+  void _activarModoEdicion(Map<String, dynamic> emp) {
+    setState(() {
+      _empleadoIdEdicion = emp['id'].toString();
+      _nombreController.text = emp['nombre_completo'] ?? '';
+      _numeroEmpleadoController.text = emp['numero_empleado']?.toString() ?? '';
+      _correoController.text = emp['correo_electronico'] ?? '';
+      _pinAltaController.text = emp['pin_acceso'] ?? '';
+      _rolSeleccionado = emp['rol'] ?? 'TRABAJADOR';
+      _sucursalSeleccionadaUuid = emp['sucursal_id']?.toString();
+    });
+  }
+
+  void _cancelarEdicion() {
+    setState(() {
+      _empleadoIdEdicion = null;
+      _nombreController.clear();
+      _numeroEmpleadoController.clear();
+      _correoController.clear();
+      _pinAltaController.clear();
+      _rolSeleccionado = 'TRABAJADOR';
+    });
   }
   Widget _buildSidebarMenu() {
     return Container(
       width: 240,
-      color: const Color(0xFF1E293B), // Gris Oxford Corporativo
+      color: const Color(0xFF1E293B), 
       child: Column(
         children: [
           Container(
@@ -316,10 +308,7 @@ class _AdminPageState extends State<AdminPage> {
           _buildItemSidebar(id: 'REGISTRO', titulo: 'Registro de Personal', icono: Icons.person_add_alt_1),
           _buildItemSidebar(id: 'MONITOREO', titulo: 'Monitoreo Asistencias', icono: Icons.playlist_add_check_circle),
           const Spacer(),
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text('v2.1.0 - Estructura Pura', style: TextStyle(color: Colors.white30, fontSize: 11)),
-          )
+          const Padding(padding: EdgeInsets.all(16.0), child: Text('v2.2.0 - CRUD Excel Activo', style: TextStyle(color: Colors.white30, fontSize: 11)))
         ],
       ),
     );
@@ -364,18 +353,33 @@ class _AdminPageState extends State<AdminPage> {
                           DataColumn(label: Text('NÓMINA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                           DataColumn(label: Text('NOMBRE COMPLETO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                           DataColumn(label: Text('ROL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                          DataColumn(label: Text('CORREO ELECTRÓNICO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                           DataColumn(label: Text('SUCURSAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                          DataColumn(label: Text('PIN DE ACCESO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                          DataColumn(label: Text('PIN REAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                          DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))), // <-- NUEVO
                         ],
                         rows: _empleadosRegistrados.map((emp) {
                           final sucData = emp['sucursales'] as Map<String, dynamic>?;
                           final String nombreSucursal = sucData != null ? (sucData['nombre'] ?? 'Sin asignar') : 'Sin asignar';
+                          final String correoMostrar = emp['correo_electronico'] ?? 'Sin correo';
+                          final String nombreEmp = emp['nombre_completo'] ?? '';
+                          final String idEmp = emp['id'].toString();
+
                           return DataRow(cells: [
                             DataCell(Text(emp['numero_empleado'].toString(), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-                            DataCell(Text(emp['nombre_completo'] ?? '', style: const TextStyle(fontSize: 13))),
+                            DataCell(Text(nombreEmp, style: const TextStyle(fontSize: 13))),
                             DataCell(Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: emp['rol'] == 'ADMINISTRADOR' ? Colors.purple.shade50 : Colors.blue.shade50, borderRadius: BorderRadius.circular(4)), child: Text(emp['rol'] ?? '', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: emp['rol'] == 'ADMINISTRADOR' ? Colors.purple.shade700 : Colors.blue.shade700)))),
+                            DataCell(Text(correoMostrar, style: TextStyle(fontSize: 13, color: emp['correo_electronico'] != null ? Colors.black87 : Colors.grey))),
                             DataCell(Text(nombreSucursal, style: const TextStyle(fontSize: 13))),
-                            DataCell(Text('••••', style: TextStyle(color: Colors.grey.shade400, fontSize: 13, letterSpacing: 2))),
+                            DataCell(Text(emp['pin_acceso'] ?? '----', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.teal))),
+                            DataCell(Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(icon: const Icon(Icons.edit, color: Colors.amber, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _activarModoEdicion(emp)),
+                                const SizedBox(width: 8),
+                                IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _eliminarEmpleado(idEmp, nombreEmp)),
+                              ],
+                            )),
                           ]);
                         }).toList(),
                       ),
@@ -397,13 +401,13 @@ class _AdminPageState extends State<AdminPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Row(children: [Icon(Icons.person_add, color: Colors.teal, size: 20), SizedBox(width: 8), Text('ALTA CORPORATIVA DE PERSONAL', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey))]),
+              Row(children: [Icon(_empleadoIdEdicion == null ? Icons.person_add : Icons.edit_note, color: Colors.teal, size: 20), const SizedBox(width: 8), Text(_empleadoIdEdicion == null ? 'ALTA CORPORATIVA DE PERSONAL' : 'MODIFICAR DATOS DE PERSONAL', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey))]),
               const Divider(height: 20),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Empresa:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), if (_empresasDisponibles.isNotEmpty) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaEmpresaManualmente = !_crearNuevaEmpresaManualmente), icon: Icon(_crearNuevaEmpresaManualmente ? Icons.list : Icons.add, size: 14, color: Colors.teal), label: Text(_crearNuevaEmpresaManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal)))]),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Empresa:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), if (_empresasDisponibles.isNotEmpty && _empleadoIdEdicion == null) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaEmpresaManualmente = !_crearNuevaEmpresaManualmente), icon: Icon(_crearNuevaEmpresaManualmente ? Icons.list : Icons.add, size: 14, color: Colors.teal), label: Text(_crearNuevaEmpresaManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal)))]),
               const SizedBox(height: 6),
               _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaEmpresaController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la empresa', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _empresaSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _empresasDisponibles.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _empresaSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Sucursal:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), if (_sucursalesDisponibles.isNotEmpty && !_crearNuevaEmpresaManualmente) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaSucursalManualmente = !_crearNuevaSucursalManualmente), icon: Icon(_crearNuevaSucursalManualmente ? Icons.list : Icons.add_business, size: 14, color: Colors.teal), label: Text(_crearNuevaSucursalManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal)))]),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Sucursal:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), if (_sucursalesDisponibles.isNotEmpty && !_crearNuevaEmpresaManualmente && _empleadoIdEdicion == null) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaSucursalManualmente = !_crearNuevaSucursalManualmente), icon: Icon(_crearNuevaSucursalManualmente ? Icons.list : Icons.add_business, size: 14, color: Colors.teal), label: Text(_crearNuevaSucursalManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal)))]),
               const SizedBox(height: 6),
               _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaSucursalController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la sucursal', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _sucursalSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _sucursalesDisponibles.map((s) => DropdownMenuItem(value: s['id'].toString(), child: Text(s['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _sucursalSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
@@ -427,9 +431,38 @@ class _AdminPageState extends State<AdminPage> {
               const SizedBox(height: 6),
               TextFormField(controller: _pinAltaController, keyboardType: TextInputType.visiblePassword, autofillHints: null, maxLength: 4, obscureText: true, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: '••••', counterText: '', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().length != 4 ? 'Deben ser 4 números' : null),
               const SizedBox(height: 16),
-              _guardandoEmpleado ? const Center(child: CircularProgressIndicator(color: Colors.teal)) : ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, minimumSize: const Size(double.infinity, 45), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), onPressed: _registrarNuevoEmpleado, icon: const Icon(Icons.save, color: Colors.white, size: 16), label: const Text('Registrar en Supabase', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+              _guardandoEmpleado 
+                  ? const Center(child: CircularProgressIndicator(color: Colors.teal)) 
+                  : Column(
+                      children: [
+                        ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: _empleadoIdEdicion == null ? Colors.teal : Colors.amber.shade800, minimumSize: const Size(double.infinity, 45), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), onPressed: _registrarNuevoEmpleado, icon: Icon(_empleadoIdEdicion == null ? Icons.save : Icons.edit_note, color: Colors.white, size: 16), label: Text(_empleadoIdEdicion == null ? 'Registrar en Supabase' : 'Actualizar Cambios', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                        if (_empleadoIdEdicion != null) ...[
+                          const SizedBox(height: 8),
+                          TextButton(onPressed: _cancelarEdicion, child: const Text('Cancelar Edición', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))
+                        ]
+                      ],
+                    ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _descargarExcel() {}
+  void _imprimirPDF() {}
+
+  Widget _buildCardMetrica(String titulo, String valor, IconData icono, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(titulo, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)), const SizedBox(height: 4), Text(valor, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)))]),
+            Icon(icono, size: 28, color: color),
+          ],
         ),
       ),
     );
@@ -442,18 +475,13 @@ class _AdminPageState extends State<AdminPage> {
         const SizedBox(height: 8),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseService.client
-                .from('registros_asistencia')
-                .stream(primaryKey: ['id'])
-                .order('fecha_hora_servidor', ascending: false)
-                .map((maps) {
-                  final listaFiltrada = maps.where((registro) {
-                    final fServidor = DateTime.parse(registro['fecha_hora_servidor']);
-                    return fServidor.isAfter(_rangoFechas.start.subtract(const Duration(days: 1))) && 
-                           fServidor.isBefore(_rangoFechas.end.add(const Duration(days: 1)));
-                  }).toList();
-                  return List<Map<String, dynamic>>.from(listaFiltrada);
-                }),
+            stream: SupabaseService.client.from('registros_asistencia').stream(primaryKey: ['id']).order('fecha_hora_servidor', ascending: false).map((maps) {
+              final listaFiltrada = maps.where((registro) {
+                final fServidor = DateTime.parse(registro['fecha_hora_servidor']);
+                return fServidor.isAfter(_rangoFechas.start.subtract(const Duration(days: 1))) && fServidor.isBefore(_rangoFechas.end.add(const Duration(days: 1)));
+              }).toList();
+              return List<Map<String, dynamic>>.from(listaFiltrada);
+            }),
             builder: (context, snapshot) {
               if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(fontSize: 12)));
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.teal));
@@ -466,8 +494,7 @@ class _AdminPageState extends State<AdminPage> {
                   final f = DateTime.parse(r['fecha_hora_servidor']);
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8.0),
-                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: Color(0xffe2e8f0))),
-
+                    elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: Color(0xffe2e8f0))),
                     child: ListTile(
                       leading: const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.person, color: Colors.white, size: 18)),
                       title: Text('Evento: ${r['tipo_evento']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -483,6 +510,7 @@ class _AdminPageState extends State<AdminPage> {
       ],
     );
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -494,7 +522,7 @@ class _AdminPageState extends State<AdminPage> {
       ),
       body: Row(
         children: [
-          _buildSidebarMenu(), // Menú de Navegación Izquierdo Fijo
+          _buildSidebarMenu(), 
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -506,8 +534,6 @@ class _AdminPageState extends State<AdminPage> {
                   Expanded(
                     child: LayoutBuilder(builder: (context, constraints) {
                       final bool esMovil = constraints.maxWidth < 750;
-                      
-                      // ENRUTADOR DINÁMICO DEL PANEL DERECHO SEGÚN EL SECCIÓN SELECCIONADA
                       if (_seccionActivaSidebar == 'INICIO') {
                         return Container(
                           width: double.infinity, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
