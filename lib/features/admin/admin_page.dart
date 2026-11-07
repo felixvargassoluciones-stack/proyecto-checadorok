@@ -38,7 +38,7 @@ class _RelojDigitalIndependienteState extends State<RelojDigitalIndependiente> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(40),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -65,12 +65,14 @@ class _AdminPageState extends State<AdminPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nombreController = TextEditingController();
   final TextEditingController _pinAltaController = TextEditingController();
+  final TextEditingController _numeroEmpleadoController = TextEditingController();
   bool _guardandoEmpleado = false;
 
   @override
   void dispose() {
     _nombreController.dispose();
     _pinAltaController.dispose();
+    _numeroEmpleadoController.dispose();
     super.dispose();
   }
   Future<void> _registrarNuevoEmpleado() async {
@@ -81,8 +83,40 @@ class _AdminPageState extends State<AdminPage> {
     try {
       final String nombre = _nombreController.text.trim();
       final String pin = _pinAltaController.text.trim();
+      final String numEmpleadoStr = _numeroEmpleadoController.text.trim();
+      final int? numeroEmpleado = int.tryParse(numEmpleadoStr);
       const String sucursalMatrizUuid = '91995ded-ff29-41b7-8198-08ca6cb94fb3';
 
+      if (numeroEmpleado == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ El número de empleado debe ser un valor numérico válido.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // 1. Validar que el Número de Empleado no esté duplicado corporativamente
+      final numDuplicado = await SupabaseService.client
+          .from('empleados')
+          .select('id')
+          .eq('numero_empleado', numeroEmpleado)
+          .maybeSingle();
+
+      if (numDuplicado != null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Este número de empleado ya está asignado a otro trabajador.'),
+            backgroundColor: Colors.amber,
+          ),
+        );
+        return;
+      }
+
+      // 2. Validar que el PIN de acceso no esté duplicado
       final pinDuplicado = await SupabaseService.client
           .from('empleados')
           .select('id')
@@ -100,9 +134,11 @@ class _AdminPageState extends State<AdminPage> {
         return;
       }
 
+      // 3. Inserción con el mapeo explícito relacional hacia Postgres
       await SupabaseService.client.from('empleados').insert({
         'nombre_completo': nombre,
         'pin_acceso': pin,
+        'numero_empleado': numeroEmpleado,
         'sucursal_id': sucursalMatrizUuid,
       });
 
@@ -113,6 +149,7 @@ class _AdminPageState extends State<AdminPage> {
 
       _nombreController.clear();
       _pinAltaController.clear();
+      _numeroEmpleadoController.clear();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -209,7 +246,7 @@ class _AdminPageState extends State<AdminPage> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final bool esMovil = constraints.maxWidth < 750;
-                                    final Widget formularioAlta = Container(
+                  final Widget formularioAlta = Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -230,6 +267,24 @@ class _AdminPageState extends State<AdminPage> {
                             ],
                           ),
                           const Divider(height: 20),
+                          const Text('Número de Empleado / Nómina:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: _numeroEmpleadoController,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(fontSize: 14),
+                            decoration: InputDecoration(
+                              hintText: 'Ej. 1024',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            validator: (val) {
+                              if (val == null || val.trim().isEmpty) return 'Requerido';
+                              if (int.tryParse(val.trim()) == null) return 'Solo números enteros';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
                           const Text('Nombre Completo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           const SizedBox(height: 6),
                           TextFormField(
