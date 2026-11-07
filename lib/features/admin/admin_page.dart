@@ -68,31 +68,29 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController _nuevaSucursalController = TextEditingController();
   final TextEditingController _nuevaEmpresaController = TextEditingController();
   final TextEditingController _correoController = TextEditingController();
-  final TextEditingController _nuevoPuestoController = TextEditingController(); // Nuevo manual de puesto
-  final TextEditingController _buscarExcelController = TextEditingController(); // <-- NUEVO: Barra de filtrado tipo Excel
+  final TextEditingController _nuevoPuestoController = TextEditingController(); 
+  final TextEditingController _buscarExcelController = TextEditingController(); 
 
   bool _guardandoEmpleado = false;
 
   // Listas de Catálogos e Historiales
   List<Map<String, dynamic>> _empresasDisponibles = [];
   List<Map<String, dynamic>> _sucursalesDisponibles = [];
-  List<Map<String, dynamic>> _puestosDisponibles = []; // <-- NUEVO: Catálogo de puestos
+  List<Map<String, dynamic>> _puestosDisponibles = []; 
   List<Map<String, dynamic>> _empleadosRegistrados = []; 
   
   String? _empresaSeleccionadaUuid;
   String? _sucursalSeleccionadaUuid;
-  String? _puestoSeleccionadoUuid; // <-- NUEVO: ID del puesto seleccionado
+  String? _puestoSeleccionadoUuid; 
 
   // Variables de control de vistas híbridas
   bool _cargandoDatos = true;
   bool _crearNuevaSucursalManualmente = false;
   bool _crearNuevaEmpresaManualmente = false;
-  bool _crearNuevoPuestoManualmente = false; // <-- Control híbrido de puestos
+  bool _crearNuevoPuestoManualmente = false; 
 
   String _seccionActivaSidebar = 'INICIO';
   String? _empleadoIdEdicion;
-  
-  // --- NUEVA VARIABLE: Almacena la Fecha de Ingreso del trabajador ---
   DateTime? _fechaIngresoSeleccionada; 
 
   @override
@@ -407,7 +405,6 @@ class _AdminPageState extends State<AdminPage> {
       }
       if (sucursalIdFinal == null) throw 'No se determinó la sucursal.';
 
-      // Insertar puesto si está en modo manual
       if (_crearNuevoPuestoManualmente) {
         final String nombreNuevoPuesto = _nuevoPuestoController.text.trim();
         final nuevoPuestoData = await SupabaseService.client.from('puestos').insert({'nombre': nombreNuevoPuesto}).select('id').single();
@@ -422,7 +419,7 @@ class _AdminPageState extends State<AdminPage> {
         'sucursal_id': sucursalIdFinal,
         'puesto_id': puestoIdFinal,
         'correo_electronico': correo.isEmpty ? null : correo,
-        'fecha_ingreso': _fechaIngresoSeleccionada!.toIso8601String().substring(0, 10), // Formato YYYY-MM-DD
+        'fecha_ingreso': _fechaIngresoSeleccionada!.toIso8601String().substring(0, 10),
       };
 
       if (_empleadoIdEdicion == null) {
@@ -539,7 +536,6 @@ class _AdminPageState extends State<AdminPage> {
   Widget _buildTablaEmpleadosExcel() {
     final String busqueda = _buscarExcelController.text.trim().toLowerCase();
     
-    // Filtrado predictivo instantáneo local
     final listaFiltrada = _empleadosRegistrados.where((emp) {
       final String nomina = emp['numero_empleado']?.toString().toLowerCase() ?? '';
       final String nombre = emp['nombre_completo']?.toString().toLowerCase() ?? '';
@@ -560,7 +556,6 @@ class _AdminPageState extends State<AdminPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // BARRA DE BÚSQUEDA INTEGRADA TIPO EXCEL
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: Row(
@@ -568,7 +563,7 @@ class _AdminPageState extends State<AdminPage> {
                 Expanded(
                   child: TextFormField(
                     controller: _buscarExcelController,
-                    onChanged: (value) => setState(() {}), // Redibuja localmente el filtro
+                    onChanged: (value) => setState(() {}), 
                     decoration: InputDecoration(
                       hintText: '🔍 Buscar por Nómina, Nombre, Cargo, Correo, Sucursal o Fecha...',
                       hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
@@ -598,7 +593,7 @@ class _AdminPageState extends State<AdminPage> {
                           DataColumn(label: Text('NÓMINA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                           DataColumn(label: Text('NOMBRE COMPLETO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                           DataColumn(label: Text('CARGO / PUESTO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                          DataColumn(label: Text('FECHA INGRESO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))), // <-- NUEVO
+                          DataColumn(label: Text('FECHA INGRESO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))), 
                           DataColumn(label: Text('CORREO ELECTRÓNICO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                           DataColumn(label: Text('SUCURSAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                           DataColumn(label: Text('PIN DE ACCESO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
@@ -689,9 +684,7 @@ class _AdminPageState extends State<AdminPage> {
               _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaSucursalController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la sucursal', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _sucursalSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), items: _sucursalesDisponibles.where((s) => s['empresa_id'].toString() == _empresaSeleccionadaUuid).map((s) => DropdownMenuItem(value: s['id'].toString(), child: Text(s['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _sucursalSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
 
-              // SECCIÓN CARGO / PUESTO CON CRUD COMPLETO
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                              // SECCIÓN CARGO / PUESTO CON FILA DE BOTONES CRUD INTEGRADA
+              // SECCIÓN CARGO / PUESTO CON FILA DE BOTONES CRUD INTEGRADA (CORREGIDA)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween, 
                 children: [
@@ -699,19 +692,9 @@ class _AdminPageState extends State<AdminPage> {
                   Row(
                     children: [
                       if (_puestoSeleccionadoUuid != null && !_crearNuevoPuestoManualmente) ...[
-                        IconButton(
-                          icon: const Icon(Icons.edit, size: 14, color: Colors.amber), 
-                          padding: EdgeInsets.zero, 
-                          constraints: const BoxConstraints(), 
-                          onPressed: _modificarPuestoDialog
-                        ),
+                        IconButton(icon: const Icon(Icons.edit, size: 14, color: Colors.amber), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _modificarPuestoDialog),
                         const SizedBox(width: 6),
-                        IconButton(
-                          icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), 
-                          padding: EdgeInsets.zero, 
-                          constraints: const BoxConstraints(), 
-                          onPressed: _eliminarPuestoDialog
-                        ),
+                        IconButton(icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _eliminarPuestoDialog),
                         const SizedBox(width: 12),
                       ],
                       if (_puestosDisponibles.isNotEmpty && _empleadoIdEdicion == null) 
@@ -725,17 +708,6 @@ class _AdminPageState extends State<AdminPage> {
                   )
                 ]
               ),
-
-                Row(children: [
-                  if (_puestoSeleccionadoUuid != null && !_crearNuevoPuestoManualmente) ...[
-                    IconButton(icon: const Icon(Icons.edit, size: 14, color: Colors.amber), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _modificarPuestoDialog),
-                    const SizedBox(width: 6),
-                    IconButton(icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _eliminarPuestoDialog),
-                    const SizedBox(width: 12),
-                  ],
-                  if (_puestosDisponibles.isNotEmpty && _empleadoIdEdicion == null) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevoPuestoManualmente = !_crearNuevoPuestoManualmente), icon: Icon(_crearNuevoPuestoManualmente ? Icons.list : Icons.add_circle_outline, size: 14, color: Colors.teal), label: Text(_crearNuevoPuestoManualmente ? "Ver lista" : "Nuevo manual", style: const TextStyle(fontSize: 11, color: Colors.teal))),
-                ])
-              ]),
               const SizedBox(height: 6),
               _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevoPuestoManualmente ? TextFormField(controller: _nuevoPuestoController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. Mecánico, Supervisor', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _puestoSeleccionadoUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _puestosDisponibles.map((p) => DropdownMenuItem(value: p['id'].toString(), child: Text(p['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _puestoSeleccionadoUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
@@ -759,7 +731,7 @@ class _AdminPageState extends State<AdminPage> {
               const SizedBox(height: 12),
               const Text('Nombre Completo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               const SizedBox(height: 6),
-              TextFormField(controller: _nombreController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. Juan Pérez López', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null),
+              TextFormField(controller: _nombreController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. Juan Pérez López', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) ,
               const SizedBox(height: 12),
               const Text('PIN de Acceso (4 dígitos):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               const SizedBox(height: 6),
@@ -817,20 +789,15 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-
   void _descargarExcel() {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('📥 Generando archivo CSV...'), backgroundColor: Colors.teal),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📥 Generando archivo CSV...'), backgroundColor: Colors.teal));
     }
   }
 
   void _imprimirPDF() {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('📄 Compilando reporte en PDF...'), backgroundColor: Colors.blueGrey),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📄 Compilando reporte en PDF...'), backgroundColor: Colors.blueGrey));
     }
   }
 
@@ -838,30 +805,17 @@ class _AdminPageState extends State<AdminPage> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white, 
-          borderRadius: BorderRadius.circular(12), 
-          border: Border.all(color: const Color(0xffe2e8f0))
-        ),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start, 
-              children: [
-                Text(titulo, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)), 
-                const SizedBox(height: 4), 
-                Text(valor, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)))
-              ]
-            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(titulo, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)), const SizedBox(height: 4), Text(valor, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)))]),
             Icon(icono, size: 28, color: color),
           ],
         ),
       ),
     );
   }
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
