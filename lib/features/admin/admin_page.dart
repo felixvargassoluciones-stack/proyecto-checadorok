@@ -66,45 +66,71 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController _nombreController = TextEditingController();
   final TextEditingController _pinAltaController = TextEditingController();
   final TextEditingController _numeroEmpleadoController = TextEditingController();
-  final TextEditingController _nuevaSucursalController = TextEditingController(); // <-- NUEVO
+  final TextEditingController _nuevaSucursalController = TextEditingController();
+  final TextEditingController _nuevaEmpresaController = TextEditingController(); // <-- NUEVO: Controlador Empresa
+
   bool _guardandoEmpleado = false;
 
-  // Variables para la sincronización dinámica de sucursales
+  // Catálogos dinámicos
+  List<Map<String, dynamic>> _empresasDisponibles = [];
   List<Map<String, dynamic>> _sucursalesDisponibles = [];
+  
+  String? _empresaSeleccionadaUuid;
   String? _sucursalSeleccionadaUuid;
-  bool _cargandoSucursales = true;
-  bool _crearNuevaSucursalManualmente = false; // <-- Controla el flujo manual en caliente
+  
+  bool _cargandoDatos = true;
+  bool _crearNuevaSucursalManualmente = false;
+  bool _crearNuevaEmpresaManualmente = false; // <-- Control híbrido de empresa
 
   @override
   void initState() {
     super.initState();
-    _cargarSucursalesDeSupabase();
+    _cargarEstructuraCorporativa();
   }
 
-  Future<void> _cargarSucursalesDeSupabase() async {
+  Future<void> _cargarEstructuraCorporativa() async {
     try {
-      final datos = await SupabaseService.client
-          .from('sucursales')
+      // 1. Descargar Empresas
+      final datosEmpresas = await SupabaseService.client
+          .from('empresas')
           .select('id, nombre')
+          .order('nombre');
+
+      // 2. Descargar Sucursales
+      final datosSucursales = await SupabaseService.client
+          .from('sucursales')
+          .select('id, nombre, empresa_id')
           .order('nombre');
       
       if (mounted) {
         setState(() {
-          _sucursalesDisponibles = List<Map<String, dynamic>>.from(datos);
+          _empresasDisponibles = List<Map<String, dynamic>>.from(datosEmpresas);
+          _sucursalesDisponibles = List<Map<String, dynamic>>.from(datosSucursales);
+
+          // Lógica de auto-selección o activación manual para Empresa
+          if (_empresasDisponibles.isNotEmpty) {
+            _empresaSeleccionadaUuid = _empresasDisponibles.first['id'].toString();
+            _crearNuevaEmpresaManualmente = false;
+          } else {
+            _empresaSeleccionadaUuid = null;
+            _crearNuevaEmpresaManualmente = true;
+          }
+
+          // Lógica de auto-selección o activación manual para Sucursal
           if (_sucursalesDisponibles.isNotEmpty) {
             _sucursalSeleccionadaUuid = _sucursalesDisponibles.first['id'].toString();
             _crearNuevaSucursalManualmente = false;
           } else {
-            // Si está vacía forzamos el modo manual para que pueda escribirla
             _sucursalSeleccionadaUuid = null;
             _crearNuevaSucursalManualmente = true;
           }
-          _cargandoSucursales = false;
+
+          _cargandoDatos = false;
         });
       }
     } catch (e) {
-      debugPrint("Error al cargar sucursales: $e");
-      if (mounted) setState(() => _cargandoSucursales = false);
+      debugPrint("Error al cargar datos corporativos: $e");
+      if (mounted) setState(() => _cargandoDatos = false);
     }
   }
 
@@ -114,11 +140,13 @@ class _AdminPageState extends State<AdminPage> {
     _pinAltaController.dispose();
     _numeroEmpleadoController.dispose();
     _nuevaSucursalController.dispose();
+    _nuevaEmpresaController.dispose();
     super.dispose();
   }
   Future<void> _registrarNuevoEmpleado() async {
     if (!_formKey.currentState!.validate() || _guardandoEmpleado) return;
 
+    String? empresaIdFinal = _empresaSeleccionadaUuid;
     String? sucursalIdFinal = _sucursalSeleccionadaUuid;
 
     setState(() => _guardandoEmpleado = true);
@@ -167,16 +195,36 @@ class _AdminPageState extends State<AdminPage> {
         return;
       }
 
-      // 3. FLUJO CRÍTICO MANUAl: Crear la sucursal primero si está en modo manual
-      if (_crearNuevaSucursalManualmente) {
-        final String nombreNuevaSucursal = _nuevaSucursalController.text.trim();
-        
-        final nuevaSucursalData = await SupabaseService.client
-            .from('sucursales')
-            .insert({'nombre': nombreNuevaSucursal})
+      // 3. PASO RAÍZ: Crear la Empresa si está en modo manual
+      if (_crearNuevaEmpresaManualmente) {
+        final String nombreNuevaEmpresa = _nuevaEmpresaController.text.trim();
+        final nuevaEmpresaData = await SupabaseService.client
+            .from('empresas')
+            .insert({'nombre': nombreNuevaEmpresa})
             .select('id')
             .single();
-            
+        empresaIdFinal = nuevaEmpresaData['id'].toString();
+      }
+
+      if (empresaIdFinal == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('⚠️ Error: No se pudo determinar la empresa.'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+
+      // 4. PASO INTERMEDIO: Crear la Sucursal si está en modo manual o si la empresa es nueva
+      if (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente) {
+        final String nombreNuevaSucursal = _nuevaSucursalController.text.trim();
+        final nuevaSucursalData = await SupabaseService.client
+            .from('sucursales')
+            .insert({
+              'nombre': nombreNuevaSucursal,
+              'empresa_id': empresaIdFinal,
+            })
+            .select('id')
+            .single();
         sucursalIdFinal = nuevaSucursalData['id'].toString();
       }
 
@@ -188,7 +236,7 @@ class _AdminPageState extends State<AdminPage> {
         return;
       }
 
-      // 4. Inserción del empleado con el ID de sucursal real resuelto
+      // 5. PASO FINAL: Registrar al Empleado en su sucursal correspondiente
       await SupabaseService.client.from('empleados').insert({
         'nombre_completo': nombre,
         'pin_acceso': pin,
@@ -205,9 +253,10 @@ class _AdminPageState extends State<AdminPage> {
       _pinAltaController.clear();
       _numeroEmpleadoController.clear();
       _nuevaSucursalController.clear();
+      _nuevaEmpresaController.clear();
       
-      // Recargar catálogo para actualizar la lista desplegable
-      await _cargarSucursalesDeSupabase();
+      // Recargar estructuras completas para actualizar los menús desplegables
+      await _cargarEstructuraCorporativa();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -326,12 +375,71 @@ class _AdminPageState extends State<AdminPage> {
                           ),
                           const Divider(height: 20),
                           
-                          // FILTRO DINÁMICO MANUAL DE SUCURSAL
+                          // --- GESTIÓN DE EMPRESA ---
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Empresa:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              if (_empresasDisponibles.isNotEmpty)
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
+                                  onPressed: () {
+                                    setState(() {
+                                      _crearNuevaEmpresaManualmente = !_crearNuevaEmpresaManualmente;
+                                    });
+                                  },
+                                  icon: Icon(_crearNuevaEmpresaManualmente ? Icons.list : Icons.add, size: 14, color: Colors.teal),
+                                  label: Text(_crearNuevaEmpresaManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal)),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          _cargandoDatos
+                              ? const LinearProgressIndicator(color: Colors.teal)
+                              : (_crearNuevaEmpresaManualmente
+                                  ? TextFormField(
+                                      controller: _nuevaEmpresaController,
+                                      textCapitalization: TextCapitalization.words,
+                                      style: const TextStyle(fontSize: 14),
+                                      decoration: InputDecoration(
+                                        hintText: 'Nombre de la nueva empresa',
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        filled: true,
+                                        fillColor: Colors.teal.withValues(alpha: 0.02),
+                                      ),
+                                      validator: (val) => val == null || val.trim().isEmpty ? 'Escribe el nombre de la empresa' : null,
+                                    )
+                                  : DropdownButtonFormField<String>(
+                                      initialValue: _empresaSeleccionadaUuid,
+                                      decoration: InputDecoration(
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        filled: true,
+                                        fillColor: Colors.grey.shade50,
+                                      ),
+                                      style: const TextStyle(fontSize: 14, color: Colors.black87),
+                                      items: _empresasDisponibles.map((empresa) {
+                                        return DropdownMenuItem<String>(
+                                          value: empresa['id'].toString(),
+                                          child: Text(empresa['nombre'] ?? 'Sin nombre'),
+                                        );
+                                      }).toList(),
+                                      onChanged: (newValue) {
+                                        setState(() {
+                                          _empresaSeleccionadaUuid = newValue;
+                                        });
+                                      },
+                                      validator: (value) => value == null ? 'Requerido' : null,
+                                    )),
+                          const SizedBox(height: 12),
+
+                          // --- GESTIÓN DE SUCURSAL ---
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text('Sucursal de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                              if (_sucursalesDisponibles.isNotEmpty)
+                              if (_sucursalesDisponibles.isNotEmpty && !_crearNuevaEmpresaManualmente)
                                 TextButton.icon(
                                   style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
                                   onPressed: () {
@@ -345,19 +453,19 @@ class _AdminPageState extends State<AdminPage> {
                             ],
                           ),
                           const SizedBox(height: 6),
-                          _cargandoSucursales
+                          _cargandoDatos
                               ? const LinearProgressIndicator(color: Colors.teal)
-                              : (_crearNuevaSucursalManualmente
+                              : (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente
                                   ? TextFormField(
                                       controller: _nuevaSucursalController,
                                       textCapitalization: TextCapitalization.words,
                                       style: const TextStyle(fontSize: 14),
                                       decoration: InputDecoration(
-                                        hintText: 'Nombre de la nueva sucursal',
+                                        hintText: _crearNuevaEmpresaManualmente ? 'Nombre de sucursal para la nueva empresa' : 'Nombre de la nueva sucursal',
                                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                         filled: true,
-                                        fillColor: Colors.teal.withValues(alpha: 0.03),
+                                        fillColor: Colors.teal.withValues(alpha: 0.02),
                                       ),
                                       validator: (val) => val == null || val.trim().isEmpty ? 'Escribe el nombre de la sucursal' : null,
                                     )
@@ -384,7 +492,7 @@ class _AdminPageState extends State<AdminPage> {
                                       validator: (value) => value == null ? 'Requerido' : null,
                                     )),
                           const SizedBox(height: 12),
-
+                          // --- CAMPOS DE EMPLEADO ---
                           const Text('Número de Empleado / Nómina:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           const SizedBox(height: 6),
                           TextFormField(
@@ -560,7 +668,6 @@ class _AdminPageState extends State<AdminPage> {
                       ),
                     ],
                   );
-
                   if (esMovil) {
                     return SingleChildScrollView(
                       child: Column(
