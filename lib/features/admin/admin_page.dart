@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/supabase_service.dart';
 
-// COMPONENTE AISLADO: Evita que el segundero redibuje el feed completo de Supabase
 class RelojDigitalIndependiente extends StatefulWidget {
   const RelojDigitalIndependiente({super.key});
 
@@ -48,7 +47,6 @@ class _RelojDigitalIndependienteState extends State<RelojDigitalIndependiente> {
     );
   }
 }
-
 class AdminPage extends StatefulWidget {
   const AdminPage({super.key});
 
@@ -67,36 +65,33 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController _pinAltaController = TextEditingController();
   final TextEditingController _numeroEmpleadoController = TextEditingController();
   final TextEditingController _nuevaSucursalController = TextEditingController();
-  final TextEditingController _nuevaEmpresaController = TextEditingController(); // <-- NUEVO: Controlador Empresa
+  final TextEditingController _nuevaEmpresaController = TextEditingController();
 
   bool _guardandoEmpleado = false;
 
-  // Catálogos dinámicos
   List<Map<String, dynamic>> _empresasDisponibles = [];
   List<Map<String, dynamic>> _sucursalesDisponibles = [];
   
   String? _empresaSeleccionadaUuid;
   String? _sucursalSeleccionadaUuid;
-  
+  String _rolSeleccionado = 'TRABAJADOR'; // Administrador o Trabajador
+
   bool _cargandoDatos = true;
   bool _crearNuevaSucursalManualmente = false;
-  bool _crearNuevaEmpresaManualmente = false; // <-- Control híbrido de empresa
+  bool _crearNuevaEmpresaManualmente = false;
 
   @override
   void initState() {
     super.initState();
     _cargarEstructuraCorporativa();
   }
-
   Future<void> _cargarEstructuraCorporativa() async {
     try {
-      // 1. Descargar Empresas
       final datosEmpresas = await SupabaseService.client
           .from('empresas')
           .select('id, nombre')
           .order('nombre');
 
-      // 2. Descargar Sucursales
       final datosSucursales = await SupabaseService.client
           .from('sucursales')
           .select('id, nombre, empresa_id')
@@ -107,7 +102,6 @@ class _AdminPageState extends State<AdminPage> {
           _empresasDisponibles = List<Map<String, dynamic>>.from(datosEmpresas);
           _sucursalesDisponibles = List<Map<String, dynamic>>.from(datosSucursales);
 
-          // Lógica de auto-selección o activación manual para Empresa
           if (_empresasDisponibles.isNotEmpty) {
             _empresaSeleccionadaUuid = _empresasDisponibles.first['id'].toString();
             _crearNuevaEmpresaManualmente = false;
@@ -116,7 +110,6 @@ class _AdminPageState extends State<AdminPage> {
             _crearNuevaEmpresaManualmente = true;
           }
 
-          // Lógica de auto-selección o activación manual para Sucursal
           if (_sucursalesDisponibles.isNotEmpty) {
             _sucursalSeleccionadaUuid = _sucursalesDisponibles.first['id'].toString();
             _crearNuevaSucursalManualmente = false;
@@ -160,42 +153,12 @@ class _AdminPageState extends State<AdminPage> {
       if (numeroEmpleado == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⚠️ El número de empleado debe ser un valor numérico válido.'), backgroundColor: Colors.orange),
+          const SnackBar(content: Text('⚠️ Número numérico no válido.'), backgroundColor: Colors.orange),
         );
         return;
       }
 
-      // 1. Validar duplicado de Número de Empleado
-      final numDuplicado = await SupabaseService.client
-          .from('empleados')
-          .select('id')
-          .eq('numero_empleado', numeroEmpleado)
-          .maybeSingle();
-
-      if (numDuplicado != null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⚠️ Este número de empleado ya está asignado.'), backgroundColor: Colors.amber),
-        );
-        return;
-      }
-
-      // 2. Validar duplicado de PIN
-      final pinDuplicado = await SupabaseService.client
-          .from('empleados')
-          .select('id')
-          .eq('pin_acceso', pin)
-          .maybeSingle();
-
-      if (pinDuplicado != null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⚠️ El PIN digitado ya pertenece a otro trabajador.'), backgroundColor: Colors.amber),
-        );
-        return;
-      }
-
-      // 3. PASO RAÍZ: Crear la Empresa si está en modo manual
+      // 1. Crear Empresa si está en modo manual
       if (_crearNuevaEmpresaManualmente) {
         final String nombreNuevaEmpresa = _nuevaEmpresaController.text.trim();
         final nuevaEmpresaData = await SupabaseService.client
@@ -207,14 +170,10 @@ class _AdminPageState extends State<AdminPage> {
       }
 
       if (empresaIdFinal == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⚠️ Error: No se pudo determinar la empresa.'), backgroundColor: Colors.red),
-        );
-        return;
+        throw 'No se determinó la empresa.';
       }
 
-      // 4. PASO INTERMEDIO: Crear la Sucursal si está en modo manual o si la empresa es nueva
+      // 2. Crear Sucursal si está en modo manual o si la empresa es nueva
       if (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente) {
         final String nombreNuevaSucursal = _nuevaSucursalController.text.trim();
         final nuevaSucursalData = await SupabaseService.client
@@ -222,6 +181,7 @@ class _AdminPageState extends State<AdminPage> {
             .insert({
               'nombre': nombreNuevaSucursal,
               'empresa_id': empresaIdFinal,
+              'pin_kiosco': '0000',
             })
             .select('id')
             .single();
@@ -229,24 +189,20 @@ class _AdminPageState extends State<AdminPage> {
       }
 
       if (sucursalIdFinal == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⚠️ Error: No se pudo determinar la sucursal.'), backgroundColor: Colors.red),
-        );
-        return;
+        throw 'No se determinó la sucursal.';
       }
-
-      // 5. PASO FINAL: Registrar al Empleado en su sucursal correspondiente
+      // 3. Registrar al Empleado o Administrador con el Rol Seleccionado
       await SupabaseService.client.from('empleados').insert({
         'nombre_completo': nombre,
         'pin_acceso': pin,
         'numero_empleado': numeroEmpleado,
         'sucursal_id': sucursalIdFinal,
+        'rol': _rolSeleccionado,
       });
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('🎉 ¡Trabajador "$nombre" dado de alta con éxito!'), backgroundColor: Colors.teal),
+        SnackBar(content: Text('🎉 ¡Registrado con éxito como $_rolSeleccionado!'), backgroundColor: Colors.teal),
       );
 
       _nombreController.clear();
@@ -255,12 +211,11 @@ class _AdminPageState extends State<AdminPage> {
       _nuevaSucursalController.clear();
       _nuevaEmpresaController.clear();
       
-      // Recargar estructuras completas para actualizar los menús desplegables
       await _cargarEstructuraCorporativa();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al dar de alta: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _guardandoEmpleado = false);
@@ -312,25 +267,14 @@ class _AdminPageState extends State<AdminPage> {
         backgroundColor: Colors.teal,
         title: const Row(
           children: [
-            Text(
-              'ADMINISTRACIÓN', 
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
-            ),
+            Text('ADMINISTRACIÓN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
             SizedBox(width: 12),
             RelojDigitalIndependiente(),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.download_for_offline, color: Colors.white),
-            tooltip: 'Exportar Excel',
-            onPressed: _descargarExcel,
-          ),
-          IconButton(
-            icon: const Icon(Icons.print, color: Colors.white),
-            tooltip: 'Imprimir PDF',
-            onPressed: _imprimirPDF,
-          ),
+          IconButton(icon: const Icon(Icons.download_for_offline, color: Colors.white), onPressed: _descargarExcel),
+          IconButton(icon: const Icon(Icons.print, color: Colors.white), onPressed: _imprimirPDF),
           const SizedBox(width: 10),
         ],
       ),
@@ -339,15 +283,7 @@ class _AdminPageState extends State<AdminPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                _buildCardMetrica('PRESENTES', '12', Icons.people, Colors.green),
-                const SizedBox(width: 10),
-                _buildCardMetrica('RETARDOS', '2', Icons.timer, Colors.amber),
-                const SizedBox(width: 10),
-                _buildCardMetrica('AUSENTES', '1', Icons.person_off, Colors.red),
-              ],
-            ),
+            Row(children: [_buildCardMetrica('PRESENTES', '0', Icons.people, Colors.green), const SizedBox(width: 10), _buildCardMetrica('RETARDOS', '0', Icons.timer, Colors.amber), const SizedBox(width: 10), _buildCardMetrica('AUSENTES', '0', Icons.person_off, Colors.red)]),
             const SizedBox(height: 16),
             Expanded(
               child: LayoutBuilder(
@@ -355,209 +291,61 @@ class _AdminPageState extends State<AdminPage> {
                   final bool esMovil = constraints.maxWidth < 750;
                   final Widget formularioAlta = Container(
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xffe2e8f0)),
-                    ),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
                     child: Form(
                       key: _formKey,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.person_add, color: Colors.teal, size: 20),
-                              SizedBox(width: 8),
-                              Text('ALTA MANUAL DE TRABAJADOR', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                            ],
-                          ),
+                          const Row(children: [Icon(Icons.person_add, color: Colors.teal, size: 20), SizedBox(width: 8), Text('ALTA CORPORATIVA DE PERSONAL', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey))]),
                           const Divider(height: 20),
-                          
-                          // --- GESTIÓN DE EMPRESA ---
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text('Empresa:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                               if (_empresasDisponibles.isNotEmpty)
-                                TextButton.icon(
-                                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
-                                  onPressed: () {
-                                    setState(() {
-                                      _crearNuevaEmpresaManualmente = !_crearNuevaEmpresaManualmente;
-                                    });
-                                  },
-                                  icon: Icon(_crearNuevaEmpresaManualmente ? Icons.list : Icons.add, size: 14, color: Colors.teal),
-                                  label: Text(_crearNuevaEmpresaManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal)),
-                                ),
+                                TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaEmpresaManualmente = !_crearNuevaEmpresaManualmente), icon: Icon(_crearNuevaEmpresaManualmente ? Icons.list : Icons.add, size: 14, color: Colors.teal), label: Text(_crearNuevaEmpresaManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal))),
                             ],
                           ),
                           const SizedBox(height: 6),
-                          _cargandoDatos
-                              ? const LinearProgressIndicator(color: Colors.teal)
-                              : (_crearNuevaEmpresaManualmente
-                                  ? TextFormField(
-                                      controller: _nuevaEmpresaController,
-                                      textCapitalization: TextCapitalization.words,
-                                      style: const TextStyle(fontSize: 14),
-                                      decoration: InputDecoration(
-                                        hintText: 'Nombre de la nueva empresa',
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                        filled: true,
-                                        fillColor: Colors.teal.withValues(alpha: 0.02),
-                                      ),
-                                      validator: (val) => val == null || val.trim().isEmpty ? 'Escribe el nombre de la empresa' : null,
-                                    )
-                                  : DropdownButtonFormField<String>(
-                                      initialValue: _empresaSeleccionadaUuid,
-                                      decoration: InputDecoration(
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                        filled: true,
-                                        fillColor: Colors.grey.shade50,
-                                      ),
-                                      style: const TextStyle(fontSize: 14, color: Colors.black87),
-                                      items: _empresasDisponibles.map((empresa) {
-                                        return DropdownMenuItem<String>(
-                                          value: empresa['id'].toString(),
-                                          child: Text(empresa['nombre'] ?? 'Sin nombre'),
-                                        );
-                                      }).toList(),
-                                      onChanged: (newValue) {
-                                        setState(() {
-                                          _empresaSeleccionadaUuid = newValue;
-                                        });
-                                      },
-                                      validator: (value) => value == null ? 'Requerido' : null,
-                                    )),
+                          _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaEmpresaController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la empresa', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _empresaSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _empresasDisponibles.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _empresaSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
                           const SizedBox(height: 12),
-
-                          // --- GESTIÓN DE SUCURSAL ---
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Sucursal de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              const Text('Sucursal:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                               if (_sucursalesDisponibles.isNotEmpty && !_crearNuevaEmpresaManualmente)
-                                TextButton.icon(
-                                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
-                                  onPressed: () {
-                                    setState(() {
-                                      _crearNuevaSucursalManualmente = !_crearNuevaSucursalManualmente;
-                                    });
-                                  },
-                                  icon: Icon(_crearNuevaSucursalManualmente ? Icons.list : Icons.add_business, size: 14, color: Colors.teal),
-                                  label: Text(_crearNuevaSucursalManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal)),
-                                ),
+                                TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaSucursalManualmente = !_crearNuevaSucursalManualmente), icon: Icon(_crearNuevaSucursalManualmente ? Icons.list : Icons.add_business, size: 14, color: Colors.teal), label: Text(_crearNuevaSucursalManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal))),
                             ],
                           ),
                           const SizedBox(height: 6),
-                          _cargandoDatos
-                              ? const LinearProgressIndicator(color: Colors.teal)
-                              : (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente
-                                  ? TextFormField(
-                                      controller: _nuevaSucursalController,
-                                      textCapitalization: TextCapitalization.words,
-                                      style: const TextStyle(fontSize: 14),
-                                      decoration: InputDecoration(
-                                        hintText: _crearNuevaEmpresaManualmente ? 'Nombre de sucursal para la nueva empresa' : 'Nombre de la nueva sucursal',
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                        filled: true,
-                                        fillColor: Colors.teal.withValues(alpha: 0.02),
-                                      ),
-                                      validator: (val) => val == null || val.trim().isEmpty ? 'Escribe el nombre de la sucursal' : null,
-                                    )
-                                  : DropdownButtonFormField<String>(
-                                      initialValue: _sucursalSeleccionadaUuid,
-                                      decoration: InputDecoration(
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                        filled: true,
-                                        fillColor: Colors.grey.shade50,
-                                      ),
-                                      style: const TextStyle(fontSize: 14, color: Colors.black87),
-                                      items: _sucursalesDisponibles.map((sucursal) {
-                                        return DropdownMenuItem<String>(
-                                          value: sucursal['id'].toString(),
-                                          child: Text(sucursal['nombre'] ?? 'Sin nombre'),
-                                        );
-                                      }).toList(),
-                                      onChanged: (newValue) {
-                                        setState(() {
-                                          _sucursalSeleccionadaUuid = newValue;
-                                        });
-                                      },
-                                      validator: (value) => value == null ? 'Requerido' : null,
-                                    )),
+                          _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaSucursalController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la sucursal', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _sucursalSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _sucursalesDisponibles.map((s) => DropdownMenuItem(value: s['id'].toString(), child: Text(s['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _sucursalSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
                           const SizedBox(height: 12),
-                          // --- CAMPOS DE EMPLEADO ---
+                          const Text('Asignar Rol en el Sistema:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<String>(
+                            initialValue: _rolSeleccionado,
+                            decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50),
+                            items: const [DropdownMenuItem(value: 'TRABAJADOR', child: Text('👤 TRABAJADOR / OPERARIO')), DropdownMenuItem(value: 'ADMINISTRADOR', child: Text('🔑 ADMINISTRADOR / SUPERVISOR'))],
+                            onChanged: (v) => setState(() => _rolSeleccionado = v ?? 'TRABAJADOR'),
+                          ),
+                          const SizedBox(height: 12),
                           const Text('Número de Empleado / Nómina:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _numeroEmpleadoController,
-                            keyboardType: TextInputType.number,
-                            style: const TextStyle(fontSize: 14),
-                            decoration: InputDecoration(
-                              hintText: 'Ej. 1024',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            ),
-                            validator: (val) {
-                              if (val == null || val.trim().isEmpty) return 'Requerido';
-                              if (int.tryParse(val.trim()) == null) return 'Solo números enteros';
-                              return null;
-                            },
-                          ),
+                          TextFormField(controller: _numeroEmpleadoController, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. 1024', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : (int.tryParse(val.trim()) == null ? 'Solo enteros' : null)),
                           const SizedBox(height: 12),
                           const Text('Nombre Completo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _nombreController,
-                            textCapitalization: TextCapitalization.words,
-                            style: const TextStyle(fontSize: 14),
-                            decoration: InputDecoration(
-                              hintText: 'Ej. Juan Pérez López',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            ),
-                            validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null,
-                          ),
+                          TextFormField(controller: _nombreController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. Juan Pérez López', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null),
                           const SizedBox(height: 12),
-                          const Text('Asignar PIN (4 dígitos):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          const Text('Asignar PIN de Acceso (4 dígitos):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _pinAltaController,
-                            keyboardType: TextInputType.number,
-                            maxLength: 4,
-                            obscureText: true,
-                            style: const TextStyle(fontSize: 14),
-                            decoration: InputDecoration(
-                              hintText: '••••',
-                              counterText: '',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            ),
-                            validator: (val) {
-                              if (val == null || val.trim().length != 4) return 'Deben ser 4 números';
-                              if (int.tryParse(val) == null) return 'Solo números';
-                              return null;
-                            },
-                          ),
+                          TextFormField(controller: _pinAltaController, keyboardType: TextInputType.number, maxLength: 4, obscureText: true, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: '••••', counterText: '', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().length != 4 ? 'Deben ser 4 números' : null),
                           const SizedBox(height: 16),
                           _guardandoEmpleado
                               ? const Center(child: CircularProgressIndicator(color: Colors.teal))
-                              : ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.teal,
-                                    minimumSize: const Size(double.infinity, 45),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  onPressed: _registrarNuevoEmpleado,
-                                  icon: const Icon(Icons.save, color: Colors.white, size: 16),
-                                  label: const Text('Registrar en Supabase', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                ),
+                              : ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, minimumSize: const Size(double.infinity, 45), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), onPressed: _registrarNuevoEmpleado, icon: const Icon(Icons.save, color: Colors.white, size: 16), label: const Text('Registrar en Supabase', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                         ],
                       ),
                     ),
@@ -565,100 +353,46 @@ class _AdminPageState extends State<AdminPage> {
                   final Widget seccionFeed = Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'AUDITORÍA: ${_rangoFechas.start.day}/${_rangoFechas.start.month} AL ${_rangoFechas.end.day}/${_rangoFechas.end.month}',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text('MONITOREO EN TIEMPO REAL', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                      const Text('MONITOREO DE ASISTENCIAS EN TIEMPO REAL', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
                       const SizedBox(height: 8),
                       Expanded(
                         child: StreamBuilder<List<Map<String, dynamic>>>(
-                          stream: SupabaseService.client
+                                                   stream: SupabaseService.client
                               .from('registros_asistencia')
                               .stream(primaryKey: ['id'])
                               .order('fecha_hora_servidor', ascending: false)
-                              .map((maps) => List<Map<String, dynamic>>.from(maps)),
+                              .map((maps) {
+                                final listaFiltrada = maps.where((registro) {
+                                  final fServidor = DateTime.parse(registro['fecha_hora_servidor']);
+                                  return fServidor.isAfter(_rangoFechas.start.subtract(const Duration(days: 1))) && 
+                                         fServidor.isBefore(_rangoFechas.end.add(const Duration(days: 1)));
+                                }).toList();
+                                return List<Map<String, dynamic>>.from(listaFiltrada);
+                              }),
+
                           builder: (context, snapshot) {
                             if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(fontSize: 12)));
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const Center(child: CircularProgressIndicator(color: Colors.teal));
-                            }
+                            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.teal));
                             final registros = snapshot.data ?? [];
-                            if (registros.isEmpty) {
-                              return const Center(child: Text('Sin registros capturados hoy.', style: TextStyle(fontSize: 13)));
-                            }
-
+                            if (registros.isEmpty) return const Center(child: Text('Sin checadas registradas el día de hoy.', style: TextStyle(fontSize: 13)));
                             return ListView.builder(
                               itemCount: registros.length,
                               itemBuilder: (context, index) {
-                                final registro = registros[index];
-                                final fServidor = DateTime.parse(registro['fecha_hora_servidor']);
-                                final horaFormateada = "${fServidor.hour.toString().padLeft(2, '0')}:${fServidor.minute.toString().padLeft(2, '0')}";
-                                final bool esRetardo = registro['estatus_asistencia'] == 'RETARDO';
-                                final String selfieUrl = registro['selfie_url'] ?? '';
-
-                                return Card(
+                                final r = registros[index];
+                                final f = DateTime.parse(r['fecha_hora_servidor']);
+                                                                return Card(
                                   margin: const EdgeInsets.only(bottom: 8.0),
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(8),
                                     side: const BorderSide(color: Color(0xffe2e8f0)),
                                   ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(10.0),
-                                    child: Row(
-                                      children: [
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(6),
-                                          child: selfieUrl.isEmpty || !selfieUrl.startsWith('http')
-                                              ? Container(
-                                                  width: 40,
-                                                  height: 40,
-                                                  color: Colors.grey.shade300,
-                                                  child: const Icon(Icons.person, color: Colors.grey, size: 20),
-                                                )
-                                              : Image.network(
-                                                  selfieUrl,
-                                                  width: 40,
-                                                  height: 40,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (context, error, stackTrace) => Container(
-                                                    width: 40,
-                                                    height: 40,
-                                                    color: Colors.grey.shade300,
-                                                    child: const Icon(Icons.person, color: Colors.grey, size: 20),
-                                                  ),
-                                                ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text('Evento: ${registro['tipo_evento']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.teal)),
-                                              const SizedBox(height: 2),
-                                              Text('Hora: $horaFormateada', style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                                            ],
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: esRetardo ? Colors.amber.withValues(alpha: 0.2) : Colors.green.withValues(alpha: 0.2),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                            registro['estatus_asistencia'] ?? 'PROCESANDO',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold, 
-                                              color: esRetardo ? Colors.amber.shade900 : Colors.green.shade900, 
-                                              fontSize: 10
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                  child: ListTile(
+
+                                    leading: const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.person, color: Colors.white, size: 18)),
+                                    title: Text('Evento: ${r['tipo_evento']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    subtitle: Text('Hora: ${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 11)),
+                                    trailing: Chip(label: Text(r['estatus_asistencia'] ?? 'OK', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
                                   ),
                                 );
                               },
@@ -668,26 +402,10 @@ class _AdminPageState extends State<AdminPage> {
                       ),
                     ],
                   );
-                  if (esMovil) {
-                    return SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          formularioAlta,
-                          const SizedBox(height: 20),
-                          SizedBox(height: 400, child: seccionFeed),
-                        ],
-                      ),
-                    );
-                  } else {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(width: 320, child: formularioAlta),
-                        const SizedBox(width: 20),
-                        Expanded(child: seccionFeed),
-                      ],
-                    );
-                  }
+
+                  return esMovil
+                      ? SingleChildScrollView(child: Column(children: [formularioAlta, const SizedBox(height: 20), SizedBox(height: 400, child: seccionFeed)]))
+                      : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 320, child: formularioAlta), const SizedBox(width: 20), Expanded(child: seccionFeed)]);
                 },
               ),
             ),
