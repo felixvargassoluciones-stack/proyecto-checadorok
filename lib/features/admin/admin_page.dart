@@ -68,6 +68,39 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController _numeroEmpleadoController = TextEditingController();
   bool _guardandoEmpleado = false;
 
+  // Variables para la sincronización dinámica de sucursales
+  List<Map<String, dynamic>> _sucursalesDisponibles = [];
+  String? _sucursalSeleccionadaUuid;
+  bool _cargandoSucursales = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarSucursalesDeSupabase();
+  }
+
+  Future<void> _cargarSucursalesDeSupabase() async {
+    try {
+      final datos = await SupabaseService.client
+          .from('sucursales')
+          .select('id, nombre')
+          .order('nombre');
+      
+      if (mounted) {
+        setState(() {
+          _sucursalesDisponibles = List<Map<String, dynamic>>.from(datos);
+          if (_sucursalesDisponibles.isNotEmpty) {
+            _sucursalSeleccionadaUuid = _sucursalesDisponibles.first['id'].toString();
+          }
+          _cargandoSucursales = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error al cargar sucursales: $e");
+      if (mounted) setState(() => _cargandoSucursales = false);
+    }
+  }
+
   @override
   void dispose() {
     _nombreController.dispose();
@@ -77,6 +110,12 @@ class _AdminPageState extends State<AdminPage> {
   }
   Future<void> _registrarNuevoEmpleado() async {
     if (!_formKey.currentState!.validate() || _guardandoEmpleado) return;
+    if (_sucursalSeleccionadaUuid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⚠️ Debes seleccionar una sucursal válida.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
 
     setState(() => _guardandoEmpleado = true);
 
@@ -85,20 +124,16 @@ class _AdminPageState extends State<AdminPage> {
       final String pin = _pinAltaController.text.trim();
       final String numEmpleadoStr = _numeroEmpleadoController.text.trim();
       final int? numeroEmpleado = int.tryParse(numEmpleadoStr);
-      const String sucursalMatrizUuid = '91995ded-ff29-41b7-8198-08ca6cb94fb3';
 
       if (numeroEmpleado == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ El número de empleado debe ser un valor numérico válido.'),
-            backgroundColor: Colors.orange,
-          ),
+          const SnackBar(content: Text('⚠️ El número de empleado debe ser un valor numérico válido.'), backgroundColor: Colors.orange),
         );
         return;
       }
 
-      // 1. Validar que el Número de Empleado no esté duplicado corporativamente
+      // 1. Validar duplicado de Número de Empleado
       final numDuplicado = await SupabaseService.client
           .from('empleados')
           .select('id')
@@ -108,15 +143,12 @@ class _AdminPageState extends State<AdminPage> {
       if (numDuplicado != null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ Este número de empleado ya está asignado a otro trabajador.'),
-            backgroundColor: Colors.amber,
-          ),
+          const SnackBar(content: Text('⚠️ Este número de empleado ya está asignado.'), backgroundColor: Colors.amber),
         );
         return;
       }
 
-      // 2. Validar que el PIN de acceso no esté duplicado
+      // 2. Validar duplicado de PIN
       final pinDuplicado = await SupabaseService.client
           .from('empleados')
           .select('id')
@@ -126,20 +158,17 @@ class _AdminPageState extends State<AdminPage> {
       if (pinDuplicado != null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ El PIN digitado ya pertenece a otro trabajador. Elige otro.'),
-            backgroundColor: Colors.amber,
-          ),
+          const SnackBar(content: Text('⚠️ El PIN digitado ya pertenece a otro trabajador.'), backgroundColor: Colors.amber),
         );
         return;
       }
 
-      // 3. Inserción con el mapeo explícito relacional hacia Postgres
+      // 3. Inserción utilizando el ID dinámico de la sucursal elegida
       await SupabaseService.client.from('empleados').insert({
         'nombre_completo': nombre,
         'pin_acceso': pin,
         'numero_empleado': numeroEmpleado,
-        'sucursal_id': sucursalMatrizUuid,
+        'sucursal_id': _sucursalSeleccionadaUuid,
       });
 
       if (!mounted) return;
@@ -267,6 +296,36 @@ class _AdminPageState extends State<AdminPage> {
                             ],
                           ),
                           const Divider(height: 20),
+                          
+                          // SELECTOR DE SUCURSAL DINÁMICO CONECTADO A SUPABASE
+                          const Text('Asignar Sucursal de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          _cargandoSucursales
+                              ? const LinearProgressIndicator(color: Colors.teal)
+                              : DropdownButtonFormField<String>(
+                                  initialValue: _sucursalSeleccionadaUuid,
+                                  decoration: InputDecoration(
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    filled: true,
+                                    fillColor: Colors.grey.shade50,
+                                  ),
+                                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                                  items: _sucursalesDisponibles.map((sucursal) {
+                                    return DropdownMenuItem<String>(
+                                      value: sucursal['id'].toString(),
+                                      child: Text(sucursal['nombre'] ?? 'Sin nombre'),
+                                    );
+                                  }).toList(),
+                                  onChanged: (newValue) {
+                                    setState(() {
+                                      _sucursalSeleccionadaUuid = newValue;
+                                    });
+                                  },
+                                  validator: (value) => value == null ? 'Requerido' : null,
+                                ),
+                          const SizedBox(height: 12),
+
                           const Text('Número de Empleado / Nómina:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           const SizedBox(height: 6),
                           TextFormField(
