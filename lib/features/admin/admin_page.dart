@@ -66,6 +66,7 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController _numeroEmpleadoController = TextEditingController();
   final TextEditingController _nuevaSucursalController = TextEditingController();
   final TextEditingController _nuevaEmpresaController = TextEditingController();
+  final TextEditingController _correoController = TextEditingController(); // <-- NUEVO
 
   bool _guardandoEmpleado = false;
 
@@ -74,7 +75,7 @@ class _AdminPageState extends State<AdminPage> {
   
   String? _empresaSeleccionadaUuid;
   String? _sucursalSeleccionadaUuid;
-  String _rolSeleccionado = 'TRABAJADOR'; // Administrador o Trabajador
+  String _rolSeleccionado = 'TRABAJADOR';
 
   bool _cargandoDatos = true;
   bool _crearNuevaSucursalManualmente = false;
@@ -134,6 +135,7 @@ class _AdminPageState extends State<AdminPage> {
     _numeroEmpleadoController.dispose();
     _nuevaSucursalController.dispose();
     _nuevaEmpresaController.dispose();
+    _correoController.dispose(); // <-- NUEVO
     super.dispose();
   }
   Future<void> _registrarNuevoEmpleado() async {
@@ -148,6 +150,7 @@ class _AdminPageState extends State<AdminPage> {
       final String nombre = _nombreController.text.trim();
       final String pin = _pinAltaController.text.trim();
       final String numEmpleadoStr = _numeroEmpleadoController.text.trim();
+      final String correo = _correoController.text.trim(); // <-- NUEVO
       final int? numeroEmpleado = int.tryParse(numEmpleadoStr);
 
       if (numeroEmpleado == null) {
@@ -172,7 +175,6 @@ class _AdminPageState extends State<AdminPage> {
       if (empresaIdFinal == null) {
         throw 'No se determinó la empresa.';
       }
-
       // 2. Crear Sucursal si está en modo manual o si la empresa es nueva
       if (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente) {
         final String nombreNuevaSucursal = _nuevaSucursalController.text.trim();
@@ -191,13 +193,15 @@ class _AdminPageState extends State<AdminPage> {
       if (sucursalIdFinal == null) {
         throw 'No se determinó la sucursal.';
       }
-      // 3. Registrar al Empleado o Administrador con el Rol Seleccionado
+
+      // 3. Registrar al Empleado o Administrador incluyendo su Correo Electrónico
       await SupabaseService.client.from('empleados').insert({
         'nombre_completo': nombre,
         'pin_acceso': pin,
         'numero_empleado': numeroEmpleado,
         'sucursal_id': sucursalIdFinal,
         'rol': _rolSeleccionado,
+        'correo_electronico': correo.isEmpty ? null : correo, // <-- NUEVO MAPPING
       });
 
       if (!mounted) return;
@@ -210,6 +214,7 @@ class _AdminPageState extends State<AdminPage> {
       _numeroEmpleadoController.clear();
       _nuevaSucursalController.clear();
       _nuevaEmpresaController.clear();
+      _correoController.clear(); // <-- NUEVO
       
       await _cargarEstructuraCorporativa();
     } catch (e) {
@@ -221,7 +226,6 @@ class _AdminPageState extends State<AdminPage> {
       if (mounted) setState(() => _guardandoEmpleado = false);
     }
   }
-
   void _descargarExcel() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('📥 Generando archivo CSV...'), backgroundColor: Colors.teal),
@@ -233,6 +237,7 @@ class _AdminPageState extends State<AdminPage> {
       const SnackBar(content: Text('📄 Compilando reporte en PDF...'), backgroundColor: Colors.blueGrey),
     );
   }
+
   Widget _buildCardMetrica(String titulo, String valor, IconData icono, Color color) {
     return Expanded(
       child: Container(
@@ -335,13 +340,35 @@ class _AdminPageState extends State<AdminPage> {
                           const SizedBox(height: 6),
                           TextFormField(controller: _numeroEmpleadoController, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. 1024', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : (int.tryParse(val.trim()) == null ? 'Solo enteros' : null)),
                           const SizedBox(height: 12),
+                          
+                          // --- INICIO NUEVO CAMPO VISUAL: CORREO ELECTRÓNICO ---
+                          const Text('Correo Electrónico (Para envío de credenciales):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: _correoController,
+                            keyboardType: TextInputType.emailAddress,
+                            style: const TextStyle(fontSize: 14),
+                            decoration: InputDecoration(hintText: 'ejemplo@empresa.com', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+                            validator: (val) {
+                              if (val != null && val.trim().isNotEmpty) {
+                                final RegExp emailRegExp = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                                if (!emailRegExp.hasMatch(val.trim())) {
+                                  return 'Introduce un formato de correo válido';
+                                }
+                              }
+                              return null; // Es opcional para trabajadores sin correo
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          // --- FIN NUEVO CAMPO VISUAL ---
+
                           const Text('Nombre Completo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           const SizedBox(height: 6),
                           TextFormField(controller: _nombreController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. Juan Pérez López', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null),
                           const SizedBox(height: 12),
                           const Text('Asignar PIN de Acceso (4 dígitos):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           const SizedBox(height: 6),
-                          TextFormField(controller: _pinAltaController, keyboardType: TextInputType.number, maxLength: 4, obscureText: true, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: '••••', counterText: '', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().length != 4 ? 'Deben ser 4 números' : null),
+                          TextFormField(controller: _pinAltaController, keyboardType: TextInputType.visiblePassword, autofillHints: null, maxLength: 4, obscureText: true, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: '••••', counterText: '', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().length != 4 ? 'Deben ser 4 números' : null),
                           const SizedBox(height: 16),
                           _guardandoEmpleado
                               ? const Center(child: CircularProgressIndicator(color: Colors.teal))
@@ -357,7 +384,7 @@ class _AdminPageState extends State<AdminPage> {
                       const SizedBox(height: 8),
                       Expanded(
                         child: StreamBuilder<List<Map<String, dynamic>>>(
-                                                   stream: SupabaseService.client
+                          stream: SupabaseService.client
                               .from('registros_asistencia')
                               .stream(primaryKey: ['id'])
                               .order('fecha_hora_servidor', ascending: false)
@@ -369,7 +396,6 @@ class _AdminPageState extends State<AdminPage> {
                                 }).toList();
                                 return List<Map<String, dynamic>>.from(listaFiltrada);
                               }),
-
                           builder: (context, snapshot) {
                             if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(fontSize: 12)));
                             if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.teal));
@@ -380,7 +406,7 @@ class _AdminPageState extends State<AdminPage> {
                               itemBuilder: (context, index) {
                                 final r = registros[index];
                                 final f = DateTime.parse(r['fecha_hora_servidor']);
-                                                                return Card(
+                                return Card(
                                   margin: const EdgeInsets.only(bottom: 8.0),
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
@@ -388,7 +414,6 @@ class _AdminPageState extends State<AdminPage> {
                                     side: const BorderSide(color: Color(0xffe2e8f0)),
                                   ),
                                   child: ListTile(
-
                                     leading: const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.person, color: Colors.white, size: 18)),
                                     title: Text('Evento: ${r['tipo_evento']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                     subtitle: Text('Hora: ${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 11)),
