@@ -66,12 +66,14 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController _nombreController = TextEditingController();
   final TextEditingController _pinAltaController = TextEditingController();
   final TextEditingController _numeroEmpleadoController = TextEditingController();
+  final TextEditingController _nuevaSucursalController = TextEditingController(); // <-- NUEVO
   bool _guardandoEmpleado = false;
 
   // Variables para la sincronización dinámica de sucursales
   List<Map<String, dynamic>> _sucursalesDisponibles = [];
   String? _sucursalSeleccionadaUuid;
   bool _cargandoSucursales = true;
+  bool _crearNuevaSucursalManualmente = false; // <-- Controla el flujo manual en caliente
 
   @override
   void initState() {
@@ -91,6 +93,11 @@ class _AdminPageState extends State<AdminPage> {
           _sucursalesDisponibles = List<Map<String, dynamic>>.from(datos);
           if (_sucursalesDisponibles.isNotEmpty) {
             _sucursalSeleccionadaUuid = _sucursalesDisponibles.first['id'].toString();
+            _crearNuevaSucursalManualmente = false;
+          } else {
+            // Si está vacía forzamos el modo manual para que pueda escribirla
+            _sucursalSeleccionadaUuid = null;
+            _crearNuevaSucursalManualmente = true;
           }
           _cargandoSucursales = false;
         });
@@ -106,16 +113,13 @@ class _AdminPageState extends State<AdminPage> {
     _nombreController.dispose();
     _pinAltaController.dispose();
     _numeroEmpleadoController.dispose();
+    _nuevaSucursalController.dispose();
     super.dispose();
   }
   Future<void> _registrarNuevoEmpleado() async {
     if (!_formKey.currentState!.validate() || _guardandoEmpleado) return;
-    if (_sucursalSeleccionadaUuid == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ Debes seleccionar una sucursal válida.'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
+
+    String? sucursalIdFinal = _sucursalSeleccionadaUuid;
 
     setState(() => _guardandoEmpleado = true);
 
@@ -163,12 +167,33 @@ class _AdminPageState extends State<AdminPage> {
         return;
       }
 
-      // 3. Inserción utilizando el ID dinámico de la sucursal elegida
+      // 3. FLUJO CRÍTICO MANUAl: Crear la sucursal primero si está en modo manual
+      if (_crearNuevaSucursalManualmente) {
+        final String nombreNuevaSucursal = _nuevaSucursalController.text.trim();
+        
+        final nuevaSucursalData = await SupabaseService.client
+            .from('sucursales')
+            .insert({'nombre': nombreNuevaSucursal})
+            .select('id')
+            .single();
+            
+        sucursalIdFinal = nuevaSucursalData['id'].toString();
+      }
+
+      if (sucursalIdFinal == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('⚠️ Error: No se pudo determinar la sucursal.'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+
+      // 4. Inserción del empleado con el ID de sucursal real resuelto
       await SupabaseService.client.from('empleados').insert({
         'nombre_completo': nombre,
         'pin_acceso': pin,
         'numero_empleado': numeroEmpleado,
-        'sucursal_id': _sucursalSeleccionadaUuid,
+        'sucursal_id': sucursalIdFinal,
       });
 
       if (!mounted) return;
@@ -179,6 +204,10 @@ class _AdminPageState extends State<AdminPage> {
       _nombreController.clear();
       _pinAltaController.clear();
       _numeroEmpleadoController.clear();
+      _nuevaSucursalController.clear();
+      
+      // Recargar catálogo para actualizar la lista desplegable
+      await _cargarSucursalesDeSupabase();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -297,33 +326,63 @@ class _AdminPageState extends State<AdminPage> {
                           ),
                           const Divider(height: 20),
                           
-                          // SELECTOR DE SUCURSAL DINÁMICO CONECTADO A SUPABASE
-                          const Text('Asignar Sucursal de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          // FILTRO DINÁMICO MANUAL DE SUCURSAL
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Sucursal de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              if (_sucursalesDisponibles.isNotEmpty)
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
+                                  onPressed: () {
+                                    setState(() {
+                                      _crearNuevaSucursalManualmente = !_crearNuevaSucursalManualmente;
+                                    });
+                                  },
+                                  icon: Icon(_crearNuevaSucursalManualmente ? Icons.list : Icons.add_business, size: 14, color: Colors.teal),
+                                  label: Text(_crearNuevaSucursalManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal)),
+                                ),
+                            ],
+                          ),
                           const SizedBox(height: 6),
                           _cargandoSucursales
                               ? const LinearProgressIndicator(color: Colors.teal)
-                              : DropdownButtonFormField<String>(
-                                  initialValue: _sucursalSeleccionadaUuid,
-                                  decoration: InputDecoration(
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    filled: true,
-                                    fillColor: Colors.grey.shade50,
-                                  ),
-                                  style: const TextStyle(fontSize: 14, color: Colors.black87),
-                                  items: _sucursalesDisponibles.map((sucursal) {
-                                    return DropdownMenuItem<String>(
-                                      value: sucursal['id'].toString(),
-                                      child: Text(sucursal['nombre'] ?? 'Sin nombre'),
-                                    );
-                                  }).toList(),
-                                  onChanged: (newValue) {
-                                    setState(() {
-                                      _sucursalSeleccionadaUuid = newValue;
-                                    });
-                                  },
-                                  validator: (value) => value == null ? 'Requerido' : null,
-                                ),
+                              : (_crearNuevaSucursalManualmente
+                                  ? TextFormField(
+                                      controller: _nuevaSucursalController,
+                                      textCapitalization: TextCapitalization.words,
+                                      style: const TextStyle(fontSize: 14),
+                                      decoration: InputDecoration(
+                                        hintText: 'Nombre de la nueva sucursal',
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        filled: true,
+                                        fillColor: Colors.teal.withValues(alpha: 0.03),
+                                      ),
+                                      validator: (val) => val == null || val.trim().isEmpty ? 'Escribe el nombre de la sucursal' : null,
+                                    )
+                                  : DropdownButtonFormField<String>(
+                                      initialValue: _sucursalSeleccionadaUuid,
+                                      decoration: InputDecoration(
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        filled: true,
+                                        fillColor: Colors.grey.shade50,
+                                      ),
+                                      style: const TextStyle(fontSize: 14, color: Colors.black87),
+                                      items: _sucursalesDisponibles.map((sucursal) {
+                                        return DropdownMenuItem<String>(
+                                          value: sucursal['id'].toString(),
+                                          child: Text(sucursal['nombre'] ?? 'Sin nombre'),
+                                        );
+                                      }).toList(),
+                                      onChanged: (newValue) {
+                                        setState(() {
+                                          _sucursalSeleccionadaUuid = newValue;
+                                        });
+                                      },
+                                      validator: (value) => value == null ? 'Requerido' : null,
+                                    )),
                           const SizedBox(height: 12),
 
                           const Text('Número de Empleado / Nómina:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
