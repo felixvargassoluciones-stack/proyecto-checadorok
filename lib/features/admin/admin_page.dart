@@ -55,18 +55,19 @@ class AdminPage extends StatefulWidget {
 }
 
 class _AdminPageState extends State<AdminPage> {
+  final _formKey = GlobalKey<FormState>();
   final DateTimeRange _rangoFechas = DateTimeRange(
     start: DateTime.now().subtract(const Duration(days: 7)),
     end: DateTime.now(),
   );
 
-  final _formKey = GlobalKey<FormState>();
   final TextEditingController _nombreController = TextEditingController();
   final TextEditingController _pinAltaController = TextEditingController();
   final TextEditingController _numeroEmpleadoController = TextEditingController();
   final TextEditingController _nuevaSucursalController = TextEditingController();
   final TextEditingController _nuevaEmpresaController = TextEditingController();
   final TextEditingController _correoController = TextEditingController();
+  final TextEditingController _cargoController = TextEditingController(); // <-- NUEVO: Cargo manual por texto
 
   bool _guardandoEmpleado = false;
 
@@ -76,14 +77,13 @@ class _AdminPageState extends State<AdminPage> {
   
   String? _empresaSeleccionadaUuid;
   String? _sucursalSeleccionadaUuid;
-  String _rolSeleccionado = 'TRABAJADOR';
 
   bool _cargandoDatos = true;
   bool _crearNuevaSucursalManualmente = false;
   bool _crearNuevaEmpresaManualmente = false;
 
   String _seccionActivaSidebar = 'INICIO';
-  String? _empleadoIdEdicion; // Pointer clave para controlar si editamos o insertamos
+  String? _empleadoIdEdicion;
 
   @override
   void initState() {
@@ -108,11 +108,11 @@ class _AdminPageState extends State<AdminPage> {
           _empresasDisponibles = List<Map<String, dynamic>>.from(datosEmpresas);
           _sucursalesDisponibles = List<Map<String, dynamic>>.from(datosSucursales);
 
-          if (_empresasDisponibles.isNotEmpty && _empresaSeleccionadaUuid == null) {
+          if (_empresasDisponibles.isNotEmpty && (_empresaSeleccionadaUuid == null || !_empresasDisponibles.any((e) => e['id'].toString() == _empresaSeleccionadaUuid))) {
             _empresaSeleccionadaUuid = _empresasDisponibles.first['id'].toString();
             _crearNuevaEmpresaManualmente = false;
           }
-          if (_sucursalesDisponibles.isNotEmpty && _sucursalSeleccionadaUuid == null) {
+          if (_sucursalesDisponibles.isNotEmpty && (_sucursalSeleccionadaUuid == null || !_sucursalesDisponibles.any((s) => s['id'].toString() == _sucursalSeleccionadaUuid))) {
             _sucursalSeleccionadaUuid = _sucursalesDisponibles.first['id'].toString();
             _crearNuevaSucursalManualmente = false;
           }
@@ -149,7 +149,114 @@ class _AdminPageState extends State<AdminPage> {
     _nuevaSucursalController.dispose();
     _nuevaEmpresaController.dispose();
     _correoController.dispose();
+    _cargoController.dispose();
     super.dispose();
+  }
+  Future<void> _modificarEmpresaDialog() async {
+    if (_empresaSeleccionadaUuid == null) return;
+    final empresaActual = _empresasDisponibles.firstWhere((e) => e['id'].toString() == _empresaSeleccionadaUuid);
+    final editController = TextEditingController(text: empresaActual['nombre']);
+    
+    final nuevoNombre = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Modificar Nombre de Empresa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextFormField(controller: editController, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(border: OutlineInputBorder())),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(onPressed: () => Navigator.pop(context, editController.text.trim()), style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: const Text('Guardar', style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+
+    if (nuevoNombre != null && nuevoNombre.isNotEmpty) {
+      try {
+        await SupabaseService.client.from('empresas').update({'nombre': nuevoNombre}).eq('id', _empresaSeleccionadaUuid!);
+        await _cargarEstructuraCorporativa();
+        await _cargarListaEmpleadosExcel();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  Future<void> _eliminarEmpresaDialog() async {
+    if (_empresaSeleccionadaUuid == null) return;
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('⚠️ ¿Eliminar Empresa?', style: TextStyle(color: Colors.red)),
+        content: const Text('Esto eliminará todas sus sucursales y trabajadores vinculados permanentemente. ¿Proceder?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('Eliminar', style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      try {
+        await SupabaseService.client.from('empresas').delete().eq('id', _empresaSeleccionadaUuid!);
+        setState(() { _empresaSeleccionadaUuid = null; _sucursalSeleccionadaUuid = null; });
+        await _cargarEstructuraCorporativa();
+        await _cargarListaEmpleadosExcel();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+  Future<void> _modificarSucursalDialog() async {
+    if (_sucursalSeleccionadaUuid == null) return;
+    final sucursalActual = _sucursalesDisponibles.firstWhere((s) => s['id'].toString() == _sucursalSeleccionadaUuid);
+    final editController = TextEditingController(text: sucursalActual['nombre']);
+    
+    final nuevoNombre = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Modificar Nombre de Sucursal', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextFormField(controller: editController, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(border: OutlineInputBorder())),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(onPressed: () => Navigator.pop(context, editController.text.trim()), style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: const Text('Guardar', style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+
+    if (nuevoNombre != null && nuevoNombre.isNotEmpty) {
+      try {
+        await SupabaseService.client.from('sucursales').update({'nombre': nuevoNombre}).eq('id', _sucursalSeleccionadaUuid!);
+        await _cargarEstructuraCorporativa();
+        await _cargarListaEmpleadosExcel();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  Future<void> _eliminarSucursalDialog() async {
+    if (_sucursalSeleccionadaUuid == null) return;
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('⚠️ ¿Eliminar Sucursal?', style: TextStyle(color: Colors.red)),
+        content: const Text('Esto eliminará de forma irreversible la sucursal y todos los empleados en ella. ¿Proceder?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('Eliminar', style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      try {
+        await SupabaseService.client.from('sucursales').delete().eq('id', _sucursalSeleccionadaUuid!);
+        setState(() { _sucursalSeleccionadaUuid = null; });
+        await _cargarEstructuraCorporativa();
+        await _cargarListaEmpleadosExcel();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      }
+    }
   }
   Future<void> _registrarNuevoEmpleado() async {
     if (!_formKey.currentState!.validate() || _guardandoEmpleado) return;
@@ -159,21 +266,19 @@ class _AdminPageState extends State<AdminPage> {
 
     final String nombre = _nombreController.text.trim();
     final String pin = _pinAltaController.text.trim();
+    final String cargo = _cargoController.text.trim(); // Puesto de trabajo manual
     final String numEmpleadoStr = _numeroEmpleadoController.text.trim();
     final String correo = _correoController.text.trim();
     final int? numeroEmpleado = int.tryParse(numEmpleadoStr);
 
     if (numeroEmpleado == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ Número de empleado no válido.'), backgroundColor: Colors.orange),
-      );
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ Número de empleado no válido.'), backgroundColor: Colors.orange));
       return;
     }
 
     setState(() => _guardandoEmpleado = true);
 
     try {
-      // Validaciones anti-duplicados (solo aplican si el campo no pertenece al registro que estamos editando)
       final existeNumero = await SupabaseService.client.from('empleados').select('id').eq('numero_empleado', numeroEmpleado).maybeSingle();
       if (existeNumero != null && (_empleadoIdEdicion == null || existeNumero['id'].toString() != _empleadoIdEdicion)) {
         throw 'El número de empleado/nómina ya está registrado.';
@@ -191,7 +296,6 @@ class _AdminPageState extends State<AdminPage> {
         throw 'El PIN de acceso ya está en uso por otro trabajador.';
       }
 
-      // Crear Empresa manual
       if (_crearNuevaEmpresaManualmente) {
         final String nombreNuevaEmpresa = _nuevaEmpresaController.text.trim();
         final nuevaEmpresaData = await SupabaseService.client.from('empresas').insert({'nombre': nombreNuevaEmpresa}).select('id').single();
@@ -199,40 +303,35 @@ class _AdminPageState extends State<AdminPage> {
       }
       if (empresaIdFinal == null) throw 'No se determinó la empresa.';
 
-      // Crear Sucursal manual
       if (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente) {
         final String nombreNuevaSucursal = _nuevaSucursalController.text.trim();
         final nuevaSucursalData = await SupabaseService.client.from('sucursales').insert({'nombre': nombreNuevaSucursal, 'empresa_id': empresaIdFinal, 'pin_kiosco': '0000'}).select('id').single();
         sucursalIdFinal = nuevaSucursalData['id'].toString();
       }
       if (sucursalIdFinal == null) throw 'No se determinó la sucursal.';
+
       final Map<String, dynamic> datosEmpleado = {
         'nombre_completo': nombre,
         'pin_acceso': pin,
         'numero_empleado': numeroEmpleado,
         'sucursal_id': sucursalIdFinal,
-        'rol': _rolSeleccionado,
+        'rol': cargo, // Se almacena de forma libre el Cargo / Puesto en la columna rol
         'correo_electronico': correo.isEmpty ? null : correo,
       };
 
       if (_empleadoIdEdicion == null) {
-        // Modo Registro
         await SupabaseService.client.from('empleados').insert(datosEmpleado);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('🎉 ¡$nombre registrado como $_rolSeleccionado!'), backgroundColor: Colors.teal));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('🎉 ¡$nombre registrado correctamente!'), backgroundColor: Colors.teal));
       } else {
-        // Modo Edición / Actualización
         await SupabaseService.client.from('empleados').update(datosEmpleado).eq('id', _empleadoIdEdicion!);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✏️ ¡Datos de $nombre actualizados con éxito!'), backgroundColor: Colors.amber.shade800));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✏️ ¡Datos de $nombre actualizados!'), backgroundColor: Colors.amber.shade800));
       }
 
       _cancelarEdicion();
       await _cargarEstructuraCorporativa();
       await _cargarListaEmpleadosExcel();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ $e'), backgroundColor: Colors.orange.shade800, duration: const Duration(seconds: 4)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ $e'), backgroundColor: Colors.orange.shade800));
     } finally {
       if (mounted) setState(() => _guardandoEmpleado = false);
     }
@@ -254,13 +353,11 @@ class _AdminPageState extends State<AdminPage> {
     if (confirmar != true) return;
     try {
       await SupabaseService.client.from('empleados').delete().eq('id', id);
-     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('🗑️ El registro de "$nombre" ha sido eliminado.'), backgroundColor: Colors.red.shade800));
-
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('🗑️ Registro de "$nombre" eliminado.'), backgroundColor: Colors.red.shade800));
       if (_empleadoIdEdicion == id) _cancelarEdicion();
       await _cargarListaEmpleadosExcel();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al eliminar: $e'), backgroundColor: Colors.red));
-
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -271,7 +368,7 @@ class _AdminPageState extends State<AdminPage> {
       _numeroEmpleadoController.text = emp['numero_empleado']?.toString() ?? '';
       _correoController.text = emp['correo_electronico'] ?? '';
       _pinAltaController.text = emp['pin_acceso'] ?? '';
-      _rolSeleccionado = emp['rol'] ?? 'TRABAJADOR';
+      _cargoController.text = emp['rol'] ?? ''; // El campo 'rol' alimenta el puesto de trabajo
       _sucursalSeleccionadaUuid = emp['sucursal_id']?.toString();
     });
   }
@@ -283,7 +380,7 @@ class _AdminPageState extends State<AdminPage> {
       _numeroEmpleadoController.clear();
       _correoController.clear();
       _pinAltaController.clear();
-      _rolSeleccionado = 'TRABAJADOR';
+      _cargoController.clear();
     });
   }
   Widget _buildSidebarMenu() {
@@ -308,7 +405,7 @@ class _AdminPageState extends State<AdminPage> {
           _buildItemSidebar(id: 'REGISTRO', titulo: 'Registro de Personal', icono: Icons.person_add_alt_1),
           _buildItemSidebar(id: 'MONITOREO', titulo: 'Monitoreo Asistencias', icono: Icons.playlist_add_check_circle),
           const Spacer(),
-          const Padding(padding: EdgeInsets.all(16.0), child: Text('v2.2.0 - CRUD Excel Activo', style: TextStyle(color: Colors.white30, fontSize: 11)))
+          const Padding(padding: EdgeInsets.all(16.0), child: Text('v2.3.0 - Flex Cargo CRUD', style: TextStyle(color: Colors.white30, fontSize: 11)))
         ],
       ),
     );
@@ -352,32 +449,28 @@ class _AdminPageState extends State<AdminPage> {
                         columns: const [
                           DataColumn(label: Text('NÓMINA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                           DataColumn(label: Text('NOMBRE COMPLETO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                          DataColumn(label: Text('ROL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                          DataColumn(label: Text('CARGO / PUESTO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))), // <-- CARGO
                           DataColumn(label: Text('CORREO ELECTRÓNICO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                           DataColumn(label: Text('SUCURSAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                          DataColumn(label: Text('PIN REAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                          DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))), // <-- NUEVO
+                          DataColumn(label: Text('PIN DE ACCESO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                          DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         ],
                         rows: _empleadosRegistrados.map((emp) {
                           final sucData = emp['sucursales'] as Map<String, dynamic>?;
                           final String nombreSucursal = sucData != null ? (sucData['nombre'] ?? 'Sin asignar') : 'Sin asignar';
-                          final String correoMostrar = emp['correo_electronico'] ?? 'Sin correo';
-                          final String nombreEmp = emp['nombre_completo'] ?? '';
-                          final String idEmp = emp['id'].toString();
-
                           return DataRow(cells: [
                             DataCell(Text(emp['numero_empleado'].toString(), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-                            DataCell(Text(nombreEmp, style: const TextStyle(fontSize: 13))),
-                            DataCell(Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: emp['rol'] == 'ADMINISTRADOR' ? Colors.purple.shade50 : Colors.blue.shade50, borderRadius: BorderRadius.circular(4)), child: Text(emp['rol'] ?? '', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: emp['rol'] == 'ADMINISTRADOR' ? Colors.purple.shade700 : Colors.blue.shade700)))),
-                            DataCell(Text(correoMostrar, style: TextStyle(fontSize: 13, color: emp['correo_electronico'] != null ? Colors.black87 : Colors.grey))),
+                            DataCell(Text(emp['nombre_completo'] ?? '', style: const TextStyle(fontSize: 13))),
+                            DataCell(Text(emp['rol'] ?? 'GENERAL', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.indigo))), // Cargo Directo
+                            DataCell(Text(emp['correo_electronico'] ?? 'Sin correo', style: const TextStyle(fontSize: 13))),
                             DataCell(Text(nombreSucursal, style: const TextStyle(fontSize: 13))),
-                            DataCell(Text(emp['pin_acceso'] ?? '----', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.teal))),
+                            DataCell(Text(emp['pin_acceso'] ?? '----', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.teal))), // PIN visible en celda
                             DataCell(Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(icon: const Icon(Icons.edit, color: Colors.amber, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _activarModoEdicion(emp)),
                                 const SizedBox(width: 8),
-                                IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _eliminarEmpleado(idEmp, nombreEmp)),
+                                IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _eliminarEmpleado(emp['id'].toString(), emp['nombre_completo'] ?? '')),
                               ],
                             )),
                           ]);
@@ -403,18 +496,46 @@ class _AdminPageState extends State<AdminPage> {
             children: [
               Row(children: [Icon(_empleadoIdEdicion == null ? Icons.person_add : Icons.edit_note, color: Colors.teal, size: 20), const SizedBox(width: 8), Text(_empleadoIdEdicion == null ? 'ALTA CORPORATIVA DE PERSONAL' : 'MODIFICAR DATOS DE PERSONAL', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey))]),
               const Divider(height: 20),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Empresa:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), if (_empresasDisponibles.isNotEmpty && _empleadoIdEdicion == null) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaEmpresaManualmente = !_crearNuevaEmpresaManualmente), icon: Icon(_crearNuevaEmpresaManualmente ? Icons.list : Icons.add, size: 14, color: Colors.teal), label: Text(_crearNuevaEmpresaManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal)))]),
+              
+              // SECCIÓN EMPRESA CON CRUD VISUAL
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('Empresa:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                Row(children: [
+                  if (_empresaSeleccionadaUuid != null && !_crearNuevaEmpresaManualmente) ...[
+                    IconButton(icon: const Icon(Icons.edit, size: 14, color: Colors.amber), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _modificarEmpresaDialog),
+                    const SizedBox(width: 6),
+                    IconButton(icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _eliminarEmpresaDialog),
+                    const SizedBox(width: 12),
+                  ],
+                  if (_empresasDisponibles.isNotEmpty && _empleadoIdEdicion == null) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaEmpresaManualmente = !_crearNuevaEmpresaManualmente), icon: Icon(_crearNuevaEmpresaManualmente ? Icons.list : Icons.add, size: 14, color: Colors.teal), label: Text(_crearNuevaEmpresaManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal))),
+                ])
+              ]),
               const SizedBox(height: 6),
-              _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaEmpresaController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la empresa', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _empresaSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _empresasDisponibles.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _empresaSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
+              _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaEmpresaController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la empresa', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _empresaSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _empresasDisponibles.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() { _empresaSeleccionadaUuid = v; _sucursalSeleccionadaUuid = null; }), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Sucursal:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), if (_sucursalesDisponibles.isNotEmpty && !_crearNuevaEmpresaManualmente && _empleadoIdEdicion == null) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaSucursalManualmente = !_crearNuevaSucursalManualmente), icon: Icon(_crearNuevaSucursalManualmente ? Icons.list : Icons.add_business, size: 14, color: Colors.teal), label: Text(_crearNuevaSucursalManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal)))]),
+              
+              // SECCIÓN SUCURSAL CON CRUD VISUAL
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('Sucursal:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                Row(children: [
+                  if (_sucursalSeleccionadaUuid != null && !_crearNuevaSucursalManualmente && _empleadoIdEdicion == null) ...[
+                    IconButton(icon: const Icon(Icons.edit, size: 14, color: Colors.amber), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _modificarSucursalDialog),
+                    const SizedBox(width: 6),
+                    IconButton(icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _eliminarSucursalDialog),
+                    const SizedBox(width: 12),
+                  ],
+                  if (_sucursalesDisponibles.isNotEmpty && !_crearNuevaEmpresaManualmente && _empleadoIdEdicion == null) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaSucursalManualmente = !_crearNuevaSucursalManualmente), icon: Icon(_crearNuevaSucursalManualmente ? Icons.list : Icons.add_business, size: 14, color: Colors.teal), label: Text(_crearNuevaSucursalManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal))),
+                ])
+              ]),
               const SizedBox(height: 6),
-              _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaSucursalController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la sucursal', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _sucursalSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _sucursalesDisponibles.map((s) => DropdownMenuItem(value: s['id'].toString(), child: Text(s['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _sucursalSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
+              _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaSucursalController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la sucursal', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _sucursalSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _sucursalesDisponibles.where((s) => s['empresa_id'].toString() == _empresaSeleccionadaUuid).map((s) => DropdownMenuItem(value: s['id'].toString(), child: Text(s['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _sucursalSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
-              const Text('Asignar Rol en el Sistema:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              // --- INPUT MANUAL: CARGO / PUESTO ---
+              const Text('Cargo / Puesto de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               const SizedBox(height: 6),
-              DropdownButtonFormField<String>(initialValue: _rolSeleccionado, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), items: const [DropdownMenuItem(value: 'TRABAJADOR', child: Text('👤 TRABAJADOR / OPERARIO')), DropdownMenuItem(value: 'ADMINISTRADOR', child: Text('🔑 ADMINISTRADOR / SUPERVISOR'))], onChanged: (v) => setState(() => _rolSeleccionado = v ?? 'TRABAJADOR')),
+              TextFormField(controller: _cargoController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. Mecánico, Administrador, Auxiliar', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null),
               const SizedBox(height: 12),
+
               const Text('Número de Empleado / Nómina:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               const SizedBox(height: 6),
               TextFormField(controller: _numeroEmpleadoController, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. 1024', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : (int.tryParse(val.trim()) == null ? 'Solo enteros' : null)),
@@ -427,21 +548,11 @@ class _AdminPageState extends State<AdminPage> {
               const SizedBox(height: 6),
               TextFormField(controller: _nombreController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. Juan Pérez López', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null),
               const SizedBox(height: 12),
-              const Text('Asignar PIN de Acceso (4 dígitos):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              const Text('PIN de Acceso (4 dígitos):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               const SizedBox(height: 6),
-              TextFormField(controller: _pinAltaController, keyboardType: TextInputType.visiblePassword, autofillHints: null, maxLength: 4, obscureText: true, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: '••••', counterText: '', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().length != 4 ? 'Deben ser 4 números' : null),
+              TextFormField(controller: _pinAltaController, keyboardType: TextInputType.number, autofillHints: null, maxLength: 4, obscureText: false, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. 4321', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)), validator: (val) => val == null || val.trim().length != 4 ? 'Deben ser 4 números' : null),
               const SizedBox(height: 16),
-              _guardandoEmpleado 
-                  ? const Center(child: CircularProgressIndicator(color: Colors.teal)) 
-                  : Column(
-                      children: [
-                        ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: _empleadoIdEdicion == null ? Colors.teal : Colors.amber.shade800, minimumSize: const Size(double.infinity, 45), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), onPressed: _registrarNuevoEmpleado, icon: Icon(_empleadoIdEdicion == null ? Icons.save : Icons.edit_note, color: Colors.white, size: 16), label: Text(_empleadoIdEdicion == null ? 'Registrar en Supabase' : 'Actualizar Cambios', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                        if (_empleadoIdEdicion != null) ...[
-                          const SizedBox(height: 8),
-                          TextButton(onPressed: _cancelarEdicion, child: const Text('Cancelar Edición', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))
-                        ]
-                      ],
-                    ),
+              _guardandoEmpleado ? const Center(child: CircularProgressIndicator(color: Colors.teal)) : Column(children: [ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: _empleadoIdEdicion == null ? Colors.teal : Colors.amber.shade800, minimumSize: const Size(double.infinity, 45), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), onPressed: _registrarNuevoEmpleado, icon: Icon(_empleadoIdEdicion == null ? Icons.save : Icons.edit_note, color: Colors.white, size: 16), label: Text(_empleadoIdEdicion == null ? 'Registrar en Supabase' : 'Actualizar Cambios', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))), if (_empleadoIdEdicion != null) ...[const SizedBox(height: 8), TextButton(onPressed: _cancelarEdicion, child: const Text('Cancelar Edición', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))]]),
             ],
           ),
         ),
@@ -510,7 +621,6 @@ class _AdminPageState extends State<AdminPage> {
       ],
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
