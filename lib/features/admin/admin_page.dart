@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/supabase_service.dart';
+import 'package:web/web.dart' as web; // 👈 NUEVA IMPORTACIÓN OFICIAL QUE ELIMINA LAS ADVERTENCIAS
 
 
 
@@ -890,30 +891,33 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-    // 📧 FUNCIÓN MODULAR ASÍNCRONA PARA ENVÍO DE CREDENCIALES VÍA BREVO API
-    // ✅ ENFOQUE CENTRALIZADO EN BASE DE DATOS: Invocación segura mediante RPC
-  Future<void> _enviarCorreoBrevo({
+    // ✅ SOLUCIÓN WEB ESTÁNDAR: Apertura de Mailto utilizando el ecosistema package:web
+  void _enviarCorreoBrevo({
     required String destinatario,
     required String nombreEmpleado,
     required String nomina,
     required String pin,
-  }) async {
-    try {
-      // Llamamos al procedimiento almacenado en Supabase passando los parámetros requeridos
-      final response = await SupabaseService.client.rpc(
-        'enviar_correo_empleado',
-        params: {
-          'p_destinatario': destinatario,
-          'p_nombre_empleado': nombreEmpleado,
-          'p_nomina': nomina,
-          'p_pin': pin,
-        },
-      );
-      debugPrint("🎉 Respuesta del servidor de base de datos: $response");
-    } catch (e) {
-      debugPrint("⚠️ Error al delegar el correo al servidor Supabase RPC: $e");
-    }
+  }) {
+    final String asunto = Uri.encodeComponent("🔑 CREDENCIALES DE ACCESO - RELOJ CHECADOR");
+    final String cuerpo = Uri.encodeComponent(
+      "¡Hola, $nombreEmpleado!\n\n"
+      "Se ha generado tu alta en el sistema de asistencia.\n"
+      "A continuación, se detallan tus credenciales oficiales para registrar tus entradas y salidas en el Kiosco:\n\n"
+      "----------------------------------------\n"
+      "  NÚMERO DE NÓMINA: $nomina\n"
+      "  PIN DE ACCESO:    $pin\n"
+      "----------------------------------------\n\n"
+      "Por seguridad, memoriza tu PIN de 4 dígitos y evita compartirlo."
+    );
+
+    final String mailtoUrl = "mailto:$destinatario?subject=$asunto&body=$cuerpo";
+
+    // ✅ Uso correcto del DOM moderno usando el prefijo web sin lanzar alertas ni errores de tipado
+    final web.HTMLAnchorElement anchor = web.document.createElement('a') as web.HTMLAnchorElement;
+    anchor.href = mailtoUrl;
+    anchor.click();
   }
+
 
 
 

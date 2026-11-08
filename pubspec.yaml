@@ -37,6 +37,7 @@ dependencies:
   supabase_flutter: ^2.18.3
   camera: ^0.12.2
   http: ^1.1.0
+  web: ^1.0.0
 
 dev_dependencies:
   flutter_test:
