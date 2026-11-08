@@ -171,7 +171,7 @@ class _AdminPageState extends State<AdminPage> {
     _buscarExcelController.dispose();
     super.dispose();
   }
-  Future<void> _modificarEmpresaDialog() async {
+    Future<void> _modificarEmpresaDialog() async {
     if (_empresaSeleccionadaUuid == null) return;
     final empresaActual = _empresasDisponibles.firstWhere((e) => e['id'].toString() == _empresaSeleccionadaUuid);
     final editController = TextEditingController(text: empresaActual['nombre']);
@@ -180,10 +180,12 @@ class _AdminPageState extends State<AdminPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Modificar Nombre de Empresa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: TextFormField(controller: editController, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(border: OutlineInputBorder())),
+        // ✅ Forzar mayúsculas en teclado
+        content: TextFormField(controller: editController, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(border: OutlineInputBorder())),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
-          ElevatedButton(onPressed: () => Navigator.pop(context, editController.text.trim()), style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: const Text('Guardar', style: TextStyle(color: Colors.white))),
+          // ✅ Forzar mayúsculas en el string al guardar
+          ElevatedButton(onPressed: () => Navigator.pop(context, editController.text.trim().toUpperCase()), style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: const Text('Guardar', style: TextStyle(color: Colors.white))),
         ],
       ),
     );
@@ -198,6 +200,7 @@ class _AdminPageState extends State<AdminPage> {
       }
     }
   }
+
 
   Future<void> _eliminarEmpresaDialog() async {
     if (_empresaSeleccionadaUuid == null) return;
@@ -225,7 +228,7 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  Future<void> _modificarSucursalDialog() async {
+   Future<void> _modificarSucursalDialog() async {
     if (_sucursalSeleccionadaUuid == null) return;
     final sucursalActual = _sucursalesDisponibles.firstWhere((s) => s['id'].toString() == _sucursalSeleccionadaUuid);
     final editController = TextEditingController(text: sucursalActual['nombre']);
@@ -234,10 +237,12 @@ class _AdminPageState extends State<AdminPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Modificar Nombre de Sucursal', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: TextFormField(controller: editController, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(border: OutlineInputBorder())),
+        // ✅ Forzar mayúsculas en teclado
+        content: TextFormField(controller: editController, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(border: OutlineInputBorder())),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
-          ElevatedButton(onPressed: () => Navigator.pop(context, editController.text.trim()), style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: const Text('Guardar', style: TextStyle(color: Colors.white))),
+          // ✅ Forzar mayúsculas en el string al guardar
+          ElevatedButton(onPressed: () => Navigator.pop(context, editController.text.trim().toUpperCase()), style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: const Text('Guardar', style: TextStyle(color: Colors.white))),
         ],
       ),
     );
@@ -252,6 +257,7 @@ class _AdminPageState extends State<AdminPage> {
       }
     }
   }
+
 
   Future<void> _eliminarSucursalDialog() async {
     if (_sucursalSeleccionadaUuid == null) return;
@@ -278,7 +284,7 @@ class _AdminPageState extends State<AdminPage> {
       }
     }
   }
-  Future<void> _modificarPuestoDialog() async {
+   Future<void> _modificarPuestoDialog() async {
     if (_puestoSeleccionadoUuid == null) return;
     final puestoActual = _puestosDisponibles.firstWhere((p) => p['id'].toString() == _puestoSeleccionadoUuid);
     final editController = TextEditingController(text: puestoActual['nombre']);
@@ -287,10 +293,12 @@ class _AdminPageState extends State<AdminPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Modificar Nombre del Puesto', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: TextFormField(controller: editController, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(border: OutlineInputBorder())),
+        // ✅ Forzar mayúsculas en teclado
+        content: TextFormField(controller: editController, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(border: OutlineInputBorder())),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
-          ElevatedButton(onPressed: () => Navigator.pop(context, editController.text.trim()), style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: const Text('Guardar', style: TextStyle(color: Colors.white))),
+          // ✅ Forzar mayúsculas en el string al guardar
+          ElevatedButton(onPressed: () => Navigator.pop(context, editController.text.trim().toUpperCase()), style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: const Text('Guardar', style: TextStyle(color: Colors.white))),
         ],
       ),
     );
@@ -305,6 +313,7 @@ class _AdminPageState extends State<AdminPage> {
       }
     }
   }
+
 
   Future<void> _eliminarPuestoDialog() async {
     if (_puestoSeleccionadoUuid == null) return;
@@ -391,26 +400,30 @@ class _AdminPageState extends State<AdminPage> {
         throw 'El PIN de acceso ya está en uso por otro trabajador.';
       }
 
-      if (_crearNuevaEmpresaManualmente) {
-        final String nombreNuevaEmpresa = _nuevaEmpresaController.text.trim();
+           if (_crearNuevaEmpresaManualmente) {
+        // ✅ Forzar transformación a Mayúsculas
+        final String nombreNuevaEmpresa = _nuevaEmpresaController.text.trim().toUpperCase();
         final nuevaEmpresaData = await SupabaseService.client.from('empresas').insert({'nombre': nombreNuevaEmpresa}).select('id').single();
         empresaIdFinal = nuevaEmpresaData['id'].toString();
       }
       if (empresaIdFinal == null) throw 'No se determinó la empresa.';
 
       if (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente) {
-        final String nombreNuevaSucursal = _nuevaSucursalController.text.trim();
+        // ✅ Forzar transformación a Mayúsculas
+        final String nombreNuevaSucursal = _nuevaSucursalController.text.trim().toUpperCase();
         final nuevaSucursalData = await SupabaseService.client.from('sucursales').insert({'nombre': nombreNuevaSucursal, 'empresa_id': empresaIdFinal, 'pin_kiosco': '0000'}).select('id').single();
         sucursalIdFinal = nuevaSucursalData['id'].toString();
       }
       if (sucursalIdFinal == null) throw 'No se determinó la sucursal.';
 
       if (_crearNuevoPuestoManualmente) {
-        final String nombreNuevoPuesto = _nuevoPuestoController.text.trim();
+        // ✅ Forzar transformación a Mayúsculas
+        final String nombreNuevoPuesto = _nuevoPuestoController.text.trim().toUpperCase();
         final nuevoPuestoData = await SupabaseService.client.from('puestos').insert({'nombre': nombreNuevoPuesto}).select('id').single();
         puestoIdFinal = nuevoPuestoData['id'].toString();
       }
       if (puestoIdFinal == null) throw 'No se determinó el puesto de trabajo.';
+
 
       final Map<String, dynamic> datosEmpleado = {
         'nombre_completo': nombre,
@@ -632,7 +645,7 @@ class _AdminPageState extends State<AdminPage> {
       ),
     );
   }
-  Widget _buildFormularioAltaPersonal() {
+   Widget _buildFormularioAltaPersonal() {
     final String txtFecha = _fechaIngresoSeleccionada == null 
         ? 'Seleccionar Fecha' 
         : '${_fechaIngresoSeleccionada!.day}/${_fechaIngresoSeleccionada!.month}/${_fechaIngresoSeleccionada!.year}';
@@ -664,7 +677,7 @@ class _AdminPageState extends State<AdminPage> {
                 ])
               ]),
               const SizedBox(height: 6),
-              _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaEmpresaController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la empresa', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _empresaSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _empresasDisponibles.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() { _empresaSeleccionadaUuid = v; _sucursalSeleccionadaUuid = null; }), validator: (v) => v == null ? 'Requerido' : null)),
+              _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaEmpresaController, textCapitalization: TextCapitalization.characters, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la empresa', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _empresaSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _empresasDisponibles.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() { _empresaSeleccionadaUuid = v; _sucursalSeleccionadaUuid = null; }), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
               
               // SECCIÓN SUCURSAL
@@ -681,42 +694,37 @@ class _AdminPageState extends State<AdminPage> {
                 ])
               ]),
               const SizedBox(height: 6),
-              _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaSucursalController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la sucursal', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _sucursalSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), items: _sucursalesDisponibles.where((s) => s['empresa_id'].toString() == _empresaSeleccionadaUuid).map((s) => DropdownMenuItem(value: s['id'].toString(), child: Text(s['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _sucursalSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
+              _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaSucursalController, textCapitalization: TextCapitalization.characters, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la sucursal', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _sucursalSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), items: _sucursalesDisponibles.where((s) => s['empresa_id'].toString() == _empresaSeleccionadaUuid).map((s) => DropdownMenuItem(value: s['id'].toString(), child: Text(s['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _sucursalSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
-
-              // SECCIÓN CARGO / PUESTO CON FILA DE BOTONES CRUD INTEGRADA (CORREGIDA)
-              // SECCIÓN CARGO / PUESTO REESCRITA Y CORREGIDA AL 100%
-Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-  children: [
-    const Text('Cargo / Puesto de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-    Row(
-      children: [
-        // Muestra controles de edición si hay un puesto seleccionado y no se está escribiendo uno nuevo
-        if (_puestoSeleccionadoUuid != null && !_crearNuevoPuestoManualmente) ...[
-          IconButton(icon: const Icon(Icons.edit, size: 14, color: Colors.amber), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _modificarPuestoDialog),
-          const SizedBox(width: 6),
-          IconButton(icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _eliminarPuestoDialog),
-          const SizedBox(width: 12),
-        ],
-        // ✅ CORRECCIÓN SENIOR: Quitamos "_puestosDisponibles.isNotEmpty".
-        // El botón para alternar a alta manual ahora se renderiza SIEMPRE que no estemos editando un empleado.
-        if (_empleadoIdEdicion == null) 
-          TextButton.icon(
-            style: TextButton.styleFrom(padding: EdgeInsets.zero), 
-            onPressed: () => setState(() => _crearNuevoPuestoManualmente = !_crearNuevoPuestoManualmente), 
-            icon: Icon(_crearNuevoPuestoManualmente ? Icons.list : Icons.add_circle_outline, size: 14, color: Colors.teal), 
-            label: Text(_crearNuevoPuestoManualmente ? "Ver lista" : "Nuevo manual", style: const TextStyle(fontSize: 11, color: Colors.teal))
-          ),
-      ],
-    )
-  ]
-),
-
+              // SECCIÓN CARGO / PUESTO
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+                children: [
+                  const Text('Cargo / Puesto de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  Row(
+                    children: [
+                      if (_puestoSeleccionadoUuid != null && !_crearNuevoPuestoManualmente) ...[
+                        IconButton(icon: const Icon(Icons.edit, size: 14, color: Colors.amber), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _modificarPuestoDialog),
+                        const SizedBox(width: 6),
+                        IconButton(icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _eliminarPuestoDialog),
+                        const SizedBox(width: 12),
+                      ],
+                      if (_empleadoIdEdicion == null) 
+                        TextButton.icon(
+                          style: TextButton.styleFrom(padding: EdgeInsets.zero), 
+                          onPressed: () => setState(() => _crearNuevoPuestoManualmente = !_crearNuevoPuestoManualmente), 
+                          icon: Icon(_crearNuevoPuestoManualmente ? Icons.list : Icons.add_circle_outline, size: 14, color: Colors.teal), 
+                          label: Text(_crearNuevoPuestoManualmente ? "Ver lista" : "Nuevo manual", style: const TextStyle(fontSize: 11, color: Colors.teal))
+                        ),
+                    ],
+                  )
+                ]
+              ),
               const SizedBox(height: 6),
-              _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevoPuestoManualmente ? TextFormField(controller: _nuevoPuestoController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. Mecánico, Supervisor', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _puestoSeleccionadoUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _puestosDisponibles.map((p) => DropdownMenuItem(value: p['id'].toString(), child: Text(p['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _puestoSeleccionadoUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
+              _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevoPuestoManualmente ? TextFormField(controller: _nuevoPuestoController, textCapitalization: TextCapitalization.characters, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. Mecánico, Supervisor', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _puestoSeleccionadoUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _puestosDisponibles.map((p) => DropdownMenuItem(value: p['id'].toString(), child: Text(p['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _puestoSeleccionadoUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
-              // --- SECCIÓN: CALENDARIO DE FECHA DE INGRESO ---
+              
+              // SECCIÓN FECHA DE INGRESO
               const Text('Fecha de Ingreso de Nómina:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               const SizedBox(height: 6),
               OutlinedButton.icon(
@@ -749,6 +757,7 @@ Row(
       ),
     );
   }
+
 
   Widget _buildSeccionFeedMonitoreo() {
     return Column(
