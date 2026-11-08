@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/supabase_service.dart';
 
+
 class HistorialPage extends StatefulWidget {
   const HistorialPage({super.key});
 

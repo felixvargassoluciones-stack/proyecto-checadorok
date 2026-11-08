@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../../core/supabase_service.dart';
+import 'dart:typed_data'; // 👈 AGREGAR ESTA LÍNEA
 
 class KioscoPage extends StatefulWidget {
   const KioscoPage({super.key});
@@ -73,14 +74,42 @@ class _KioscoPageState extends State<KioscoPage> {
       if (mounted) setState(() {});
     }
   }
-  Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
+    Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
     if (_pinActual.isEmpty || _estaProcesando) return;
 
     setState(() => _estaProcesando = true);
     
     try {
       final ahora = DateTime.now();
+      String rutaEvidenciaFinal = 'EMPTY';
 
+      // 📷 CAPTURA AUTOMATIZADA DE EVIDENCIA EN MEMORIA
+            // 📷 CAPTURA AUTOMATIZADA DE EVIDENCIA EN MEMORIA
+      if (_cameraController != null && _cameraController!.value.isInitialized) {
+        try {
+          final XFile fotoCapturada = await _cameraController!.takePicture();
+          final Uint8List bytesFoto = await fotoCapturada.readAsBytes();
+          
+          // Nombre único usando la marca de tiempo para evitar colisiones
+          final String nombreArchivo = "${ahora.millisecondsSinceEpoch}.jpg";
+          final String rutaAlmacenamiento = "asistencias/$nombreArchivo";
+
+          // Subida estándar de bytes compatible con tu versión de Supabase
+                   // Subida estándar con inferencia automática de tipo de archivo
+          await SupabaseService.storage
+              .from('asistencias_selfies')
+              .upload(rutaAlmacenamiento, bytesFoto);
+
+
+          rutaEvidenciaFinal = rutaAlmacenamiento;
+        } catch (eCamera) {
+          debugPrint("Advertencia en captura/subida de selfie: $eCamera");
+          // Si falla la cámara, el flujo continúa guardando 'EMPTY' para no bloquear al taller
+        }
+      }
+
+
+      // 🔍 VALIDACIÓN DE CREDENCIALES
       final empleadoData = await SupabaseService.client
           .from('empleados')
           .select('id, nombre_completo, sucursal_id')
@@ -102,7 +131,8 @@ class _KioscoPageState extends State<KioscoPage> {
       final String empleadoUuid = empleadoData['id'].toString();
       final String nombreTrabajador = empleadoData['nombre_completo'] ?? "Empleado";
       final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
-      // CORRECCIÓN DE CORS: Se cambia 'https://supabase.co' por un string vacío ''
+
+      // 📝 INSERCIÓN DEL REGISTRO CON LA RUTA DE LA FOTO VINCULADA
       await SupabaseService.client.from('registros_asistencia').insert({
         'empleado_id': empleadoUuid,
         'sucursal_id': sucursalUuid,
@@ -110,7 +140,7 @@ class _KioscoPageState extends State<KioscoPage> {
         'fecha_hora_servidor': ahora.toIso8601String(),
         'dispositivo_info': 'Kiosco Web (Tablet/Móvil Responsivo)',
         'estatus_asistencia': 'TURNO_NO_PROGRAMADO',
-        'selfie_url': '', 
+        'selfie_url': rutaEvidenciaFinal, // 👈 AQUÍ SE INYECTA LA RUTA REAL
       });
 
       if (!mounted) return;
@@ -133,6 +163,7 @@ class _KioscoPageState extends State<KioscoPage> {
       }
     }
   }
+
   void _agregarDigito(String digito) {
     if (_pinActual.length >= 4) return;
     setState(() {

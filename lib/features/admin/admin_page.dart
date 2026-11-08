@@ -774,7 +774,7 @@ class _AdminPageState extends State<AdminPage> {
   }
 
 
-  Widget _buildSeccionFeedMonitoreo() {
+    Widget _buildSeccionFeedMonitoreo() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -794,19 +794,69 @@ class _AdminPageState extends State<AdminPage> {
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.teal));
               final registros = snapshot.data ?? [];
               if (registros.isEmpty) return const Center(child: Text('Sin checadas registradas el día de hoy.', style: TextStyle(fontSize: 13)));
+              
               return ListView.builder(
                 itemCount: registros.length,
                 itemBuilder: (context, index) {
                   final r = registros[index];
                   final f = DateTime.parse(r['fecha_hora_servidor']);
+                  final String empleadoId = r['empleado_id']?.toString() ?? '';
+                  final String selfieUrlCampo = r['selfie_url']?.toString() ?? 'EMPTY';
+
+                  // 🔍 CRUCE EN MEMORIA: Buscar los datos del empleado en la lista global precargada
+                  Map<String, dynamic>? empleadoEncontrado;
+                  try {
+                    empleadoEncontrado = _empleadosRegistrados.firstWhere(
+                      (emp) => emp['id'].toString() == empleadoId,
+                    );
+                  } catch (_) {
+                    empleadoEncontrado = null; // No se encontró coincidencia local
+                  }
+
+                  // Extracción de datos con respaldos seguros por si no se encuentra el ID
+                  final String nombreTrabajador = empleadoEncontrado != null ? (empleadoEncontrado['nombre_completo'] ?? 'Desconocido') : 'Desconocido';
+                  final String nominaTrabajador = empleadoEncontrado != null ? (empleadoEncontrado['numero_empleado']?.toString() ?? '----') : '----';
+                  
+                  final puestoData = empleadoEncontrado != null ? empleadoEncontrado['puestos'] as Map<String, dynamic>? : null;
+                  final String cargoTrabajador = puestoData != null ? (puestoData['nombre'] ?? 'GENERAL') : 'GENERAL';
+
+                  // 📸 OBTENCIÓN DE URL PÚBLICA DE LA SELFIE DESDE SUPABASE STORAGE
+                  String? urlFinalFoto;
+                  if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty) {
+                    urlFinalFoto = SupabaseService.storage.from('asistencias_selfies').getPublicUrl(selfieUrlCampo);
+                  }
+
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8.0),
-                    elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: Color(0xffe2e8f0))),
+                    elevation: 0, 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: Color(0xffe2e8f0))),
                     child: ListTile(
-                      leading: const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.person, color: Colors.white, size: 18)),
-                      title: Text('Evento: ${r['tipo_evento']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      subtitle: Text('Hora: ${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 11)),
-                      trailing: Chip(label: Text(r['estatus_asistencia'] ?? 'OK', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
+                      // Renderizado dinámico de la foto: Si existe URL muestra la imagen, si no, el icono genérico
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.teal),
+                        child: ClipOval(
+                          child: urlFinalFoto != null
+                              ? Image.network(
+                                  urlFinalFoto,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Colors.white, size: 18),
+                                )
+                              : const Icon(Icons.person, color: Colors.white, size: 18),
+                        ),
+                      ),
+                      title: Text(nombreTrabajador, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: Text(
+                        'Nómina: $nominaTrabajador  •  Cargo: $cargoTrabajador  •  Hora: ${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}',
+                        style: const TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                      trailing: Chip(
+                        label: Text(
+                          r['tipo_evento'] ?? 'ENTRADA', 
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
                     ),
                   );
                 },
@@ -817,6 +867,7 @@ class _AdminPageState extends State<AdminPage> {
       ],
     );
   }
+
 
   void _descargarExcel() {
     if (mounted) {
