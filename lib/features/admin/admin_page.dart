@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/supabase_service.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+
 
 
 class RelojDigitalIndependiente extends StatefulWidget {
@@ -892,67 +891,30 @@ class _AdminPageState extends State<AdminPage> {
   }
 
     // 📧 FUNCIÓN MODULAR ASÍNCRONA PARA ENVÍO DE CREDENCIALES VÍA BREVO API
+    // ✅ ENFOQUE CENTRALIZADO EN BASE DE DATOS: Invocación segura mediante RPC
   Future<void> _enviarCorreoBrevo({
     required String destinatario,
     required String nombreEmpleado,
     required String nomina,
     required String pin,
   }) async {
-    // ⚠️ Reemplaza este string por la API Key real que te dará Brevo en su panel web
-        // ✅ BYPASS DE GITHUB: Dividimos la clave en dos partes para que el robot de escaneo no la detecte como secreto
-       // ✅ SOLUCIÓN SENIOR: Ofuscación Base64. El robot de escaneo de GitHub es incapaz de leer esto.
-    final String claveOfuscada = "eHNtdHBzaWItNWIyOWU1OTY3NWQ4NGZkOTA0Y2MzYWNmZTI1NzQ5Y2FhMDYxMmFjMjIwMzNhNGY2MmY5ODY3NDMzMzhiZTliYy1ndFJFNGFybXBGdTVPeVBr";
-    final String apiKeyBrevo = utf8.decode(base64.decode(claveOfuscada));
-
-
-    const String urlBrevo = "https://api.brevo.com/v3/smtp/email";
-
     try {
-      final response = await http.post(
-        Uri.parse(urlBrevo),
-        headers: {
-          "accept": "application/json",
-          "api-key": apiKeyBrevo,
-          "content-type": "application/json",
+      // Llamamos al procedimiento almacenado en Supabase passando los parámetros requeridos
+      final response = await SupabaseService.client.rpc(
+        'enviar_correo_empleado',
+        params: {
+          'p_destinatario': destinatario,
+          'p_nombre_empleado': nombreEmpleado,
+          'p_nomina': nomina,
+          'p_pin': pin,
         },
-        body: jsonEncode({
-          "sender": {
-            "name": "CONTROL DE ASISTENCIA", 
-            "email": "notificaciones.taller@tuempresa.com" // Reemplaza por tu correo emisor autorizado en Brevo
-          },
-          "to": [
-            {"email": destinatario, "name": nombreEmpleado}
-          ],
-          "subject": "🔑 CREDENCIALES DE ACCESO - RELOJ CHECADOR",
-          "htmlContent": """
-            <div style='font-family: Arial, sans-serif; padding: 20px; color: #333;'>
-              <h2 style='color: #008080;'>¡Bienvenido al Equipo, $nombreEmpleado!</h2>
-              <p>Se ha generado tu alta en el sistema de asistencia. A continuación, se detallan tus credenciales oficiales para registrar tus entradas y salidas en el Kiosco:</p>
-              <table style='background-color: #f4f4f4; padding: 15px; border-radius: 8px; width: 100%; max-width: 400px;'>
-                <tr>
-                  <td><strong>Número de Nómina:</strong></td>
-                  <td style='font-size: 16px; font-weight: bold; color: #1a1a1a;'>$nomina</td>
-                </tr>
-                <tr>
-                  <td><strong>PIN de Acceso:</strong></td>
-                  <td style='font-size: 16px; font-weight: bold; color: #008080;'>$pin</td>
-                </tr>
-              </table>
-              <p style='margin-top: 20px; font-size: 12px; color: #777;'>Por seguridad, memoriza tu PIN de 4 dígitos y evita compartirlo con tus compañeros.</p>
-            </div>
-          """
-        }),
       );
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        debugPrint("🎉 Correo transaccional enviado con éxito mediante Brevo.");
-      } else {
-        debugPrint("❌ Error en respuesta de Brevo: ${response.body}");
-      }
+      debugPrint("🎉 Respuesta del servidor de base de datos: $response");
     } catch (e) {
-      debugPrint("⚠️ No se pudo conectar con el servidor de correos Brevo: $e");
+      debugPrint("⚠️ Error al delegar el correo al servidor Supabase RPC: $e");
     }
   }
+
 
 
 
