@@ -685,29 +685,34 @@ class _AdminPageState extends State<AdminPage> {
               const SizedBox(height: 12),
 
               // SECCIÓN CARGO / PUESTO CON FILA DE BOTONES CRUD INTEGRADA (CORREGIDA)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-                children: [
-                  const Text('Cargo / Puesto de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  Row(
-                    children: [
-                      if (_puestoSeleccionadoUuid != null && !_crearNuevoPuestoManualmente) ...[
-                        IconButton(icon: const Icon(Icons.edit, size: 14, color: Colors.amber), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _modificarPuestoDialog),
-                        const SizedBox(width: 6),
-                        IconButton(icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _eliminarPuestoDialog),
-                        const SizedBox(width: 12),
-                      ],
-                      if (_puestosDisponibles.isNotEmpty && _empleadoIdEdicion == null) 
-                        TextButton.icon(
-                          style: TextButton.styleFrom(padding: EdgeInsets.zero), 
-                          onPressed: () => setState(() => _crearNuevoPuestoManualmente = !_crearNuevoPuestoManualmente), 
-                          icon: Icon(_crearNuevoPuestoManualmente ? Icons.list : Icons.add_circle_outline, size: 14, color: Colors.teal), 
-                          label: Text(_crearNuevoPuestoManualmente ? "Ver lista" : "Nuevo manual", style: const TextStyle(fontSize: 11, color: Colors.teal))
-                        ),
-                    ],
-                  )
-                ]
-              ),
+              // SECCIÓN CARGO / PUESTO REESCRITA Y CORREGIDA AL 100%
+Row(
+  mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+  children: [
+    const Text('Cargo / Puesto de Trabajo:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+    Row(
+      children: [
+        // Muestra controles de edición si hay un puesto seleccionado y no se está escribiendo uno nuevo
+        if (_puestoSeleccionadoUuid != null && !_crearNuevoPuestoManualmente) ...[
+          IconButton(icon: const Icon(Icons.edit, size: 14, color: Colors.amber), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _modificarPuestoDialog),
+          const SizedBox(width: 6),
+          IconButton(icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _eliminarPuestoDialog),
+          const SizedBox(width: 12),
+        ],
+        // ✅ CORRECCIÓN SENIOR: Quitamos "_puestosDisponibles.isNotEmpty".
+        // El botón para alternar a alta manual ahora se renderiza SIEMPRE que no estemos editando un empleado.
+        if (_empleadoIdEdicion == null) 
+          TextButton.icon(
+            style: TextButton.styleFrom(padding: EdgeInsets.zero), 
+            onPressed: () => setState(() => _crearNuevoPuestoManualmente = !_crearNuevoPuestoManualmente), 
+            icon: Icon(_crearNuevoPuestoManualmente ? Icons.list : Icons.add_circle_outline, size: 14, color: Colors.teal), 
+            label: Text(_crearNuevoPuestoManualmente ? "Ver lista" : "Nuevo manual", style: const TextStyle(fontSize: 11, color: Colors.teal))
+          ),
+      ],
+    )
+  ]
+),
+
               const SizedBox(height: 6),
               _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevoPuestoManualmente ? TextFormField(controller: _nuevoPuestoController, textCapitalization: TextCapitalization.words, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Ej. Mecánico, Supervisor', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _puestoSeleccionadoUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), style: const TextStyle(fontSize: 14, color: Colors.black87), items: _puestosDisponibles.map((p) => DropdownMenuItem(value: p['id'].toString(), child: Text(p['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _puestoSeleccionadoUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
