@@ -98253,8 +98253,8 @@ case 2:p=c
 if(p!=null&&!p.j(0,q.id))q.S(new A.asi(q,p))
 return A.E(null,r)}})
 return A.F($async$Bp,r)},
-iP(){var s=0,r=A.G(t.H),q,p=2,o=[],n=[],m=this,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,b0,b1,b2,b3,b4
-var $async$iP=A.H(function(b5,b6){if(b5===1){o.push(b6)
+iP(){var s=0,r=A.G(t.H),q,p=2,o=[],n=[],m=this,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,b0,b1,b2,b3
+var $async$iP=A.H(function(b4,b5){if(b4===1){o.push(b5)
 s=p}for(;;)switch(s){case 0:if(!m.d.gO().n5()||m.at){s=1
 break}if(m.id==null){a7=m.c
 if(a7!=null)a7.Z(t.J).f.fb(B.WH)
@@ -98274,7 +98274,7 @@ break}m.S(new A.asf(m))
 p=4
 s=7
 return A.o($.dj.aY().e4("empleados").hC("id").hQ("numero_empleado",e).y0(),$async$iP)
-case 7:d=b6
+case 7:d=b5
 if(d!=null)a7=m.go==null||J.bo(d.h(0,"id"))!==m.go
 else a7=!1
 if(a7)throw A.f("El n\xfamero de empleado/n\xf3mina ya est\xe1 registrado.")
@@ -98282,13 +98282,13 @@ s=J.bU(f)!==0?8:9
 break
 case 8:s=10
 return A.o($.dj.aY().e4("empleados").hC("id").hQ("correo_electronico",f).y0(),$async$iP)
-case 10:c=b6
+case 10:c=b5
 if(c!=null)a7=m.go==null||J.bo(c.h(0,"id"))!==m.go
 else a7=!1
 if(a7)throw A.f("El correo electr\xf3nico ya est\xe1 asignado a otro registro.")
 case 9:s=11
 return A.o($.dj.aY().e4("empleados").hC("id").hQ("pin_acceso",h).y0(),$async$iP)
-case 11:b=b6
+case 11:b=b5
 if(b!=null)a7=m.go==null||J.bo(b.h(0,"id"))!==m.go
 else a7=!1
 if(a7)throw A.f("El PIN de acceso ya est\xe1 en uso por otro trabajador.")
@@ -98298,7 +98298,7 @@ case 12:a=B.c.di(m.y.a.a).toUpperCase()
 a7=t.N
 s=14
 return A.o($.dj.aY().e4("empresas").is(0,A.a0(["nombre",a],a7,a7)).hC("id").G0(0),$async$iP)
-case 14:a0=b6
+case 14:a0=b5
 l=J.bo(J.cx(a0,"id"))
 case 13:if(l==null)throw A.f("No se determin\xf3 la empresa.")
 s=m.dy||m.fr?15:16
@@ -98307,7 +98307,7 @@ case 15:a1=B.c.di(m.x.a.a).toUpperCase()
 a7=t.N
 s=17
 return A.o($.dj.aY().e4("sucursales").is(0,A.a0(["nombre",a1,"empresa_id",l,"pin_kiosco","0000"],a7,a7)).hC("id").G0(0),$async$iP)
-case 17:a2=b6
+case 17:a2=b5
 k=J.bo(J.cx(a2,"id"))
 case 16:if(k==null)throw A.f("No se determin\xf3 la sucursal.")
 s=m.fx?18:19
@@ -98316,7 +98316,7 @@ case 18:a3=B.c.di(m.Q.a.a).toUpperCase()
 a7=t.N
 s=20
 return A.o($.dj.aY().e4("puestos").is(0,A.a0(["nombre",a3],a7,a7)).hC("id").G0(0),$async$iP)
-case 20:a4=b6
+case 20:a4=b5
 j=J.bo(J.cx(a4,"id"))
 case 19:if(j==null)throw A.f("No se determin\xf3 el puesto de trabajo.")
 a7=k
@@ -98329,9 +98329,7 @@ case 21:s=24
 return A.o($.dj.aY().e4("empleados").is(0,a5),$async$iP)
 case 24:if(J.bU(f)!==0){b0=A.z3(2,"\ud83d\udd11 CREDENCIALES DE ACCESO - RELOJ CHECADOR",B.W,!1)
 b1=A.z3(2,"\xa1Hola, "+i+"!\n\nSe ha generado tu alta en el sistema de asistencia.\nA continuaci\xf3n, se detallan tus credenciales oficiales para registrar tus entradas y salidas en el Kiosco:\n\n----------------------------------------\n  N\xdaMERO DE N\xd3MINA: "+g+"\n  PIN DE ACCESO:    "+h+"\n----------------------------------------\n\nPor seguridad, memoriza tu PIN de 4 d\xedgitos y evita compartirlo.",B.W,!1)
-b2=v.G.document.createElement("a")
-b2.href="mailto:"+f+"?subject="+b0+"&body="+b1
-b2.click()}a7=m.c
+v.G.window.open("https://mail.google.com/mail/?view=cm&fs=1&to="+f+"&su="+b0+"&body="+b1,"_blank")}a7=m.c
 if(a7!=null)a7.Z(t.J).f.fb(B.WE)
 s=22
 break
@@ -98351,8 +98349,8 @@ case 27:n.push(6)
 s=5
 break
 case 4:p=3
-b4=o.pop()
-a6=A.W(b4)
+b3=o.pop()
+a6=A.W(b3)
 a7=m.c
 if(a7!=null)a7.Z(t.J).f.fb(A.k2(null,null,null,B.pt,null,B.x,null,A.aQ("\u26a0\ufe0f "+A.j(a6),null,null,null,null,null,null,null),null,B.aQ,null,null,null,null,null,null,null,null,null,null))
 n.push(6)

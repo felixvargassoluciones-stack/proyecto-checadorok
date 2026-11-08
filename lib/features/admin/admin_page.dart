@@ -891,13 +891,14 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-    // ✅ SOLUCIÓN WEB ESTÁNDAR: Apertura de Mailto utilizando el ecosistema package:web
+     // ✅ ENFOQUE GMAIL WEB: Abre directamente la pestaña de redacción de Google con datos precargados
   void _enviarCorreoBrevo({
     required String destinatario,
     required String nombreEmpleado,
     required String nomina,
     required String pin,
   }) {
+    // 1. Estructuramos el asunto y el cuerpo del mensaje
     final String asunto = Uri.encodeComponent("🔑 CREDENCIALES DE ACCESO - RELOJ CHECADOR");
     final String cuerpo = Uri.encodeComponent(
       "¡Hola, $nombreEmpleado!\n\n"
@@ -910,13 +911,13 @@ class _AdminPageState extends State<AdminPage> {
       "Por seguridad, memoriza tu PIN de 4 dígitos y evita compartirlo."
     );
 
-    final String mailtoUrl = "mailto:$destinatario?subject=$asunto&body=$cuerpo";
+    // 2. Usamos el enlace universal de redacción de Gmail Web (en lugar de mailto)
+    final String gmailUrl = "https://mail.google.com/mail/?view=cm&fs=1&to=$destinatario&su=$asunto&body=$cuerpo";
 
-    // ✅ Uso correcto del DOM moderno usando el prefijo web sin lanzar alertas ni errores de tipado
-    final web.HTMLAnchorElement anchor = web.document.createElement('a') as web.HTMLAnchorElement;
-    anchor.href = mailtoUrl;
-    anchor.click();
+    // 3. Abrimos Gmail en una nueva pestaña limpia del navegador de forma segura
+    web.window.open(gmailUrl, '_blank');
   }
+
 
 
 
