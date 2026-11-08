@@ -821,10 +821,18 @@ class _AdminPageState extends State<AdminPage> {
                   final String cargoTrabajador = puestoData != null ? (puestoData['nombre'] ?? 'GENERAL') : 'GENERAL';
 
                   // 📸 OBTENCIÓN DE URL PÚBLICA DE LA SELFIE DESDE SUPABASE STORAGE
+                                    // 📸 RESCATE DIRECTO DESDE STORAGE (Enfoque sugerido)
+                  // Si el campo de la tabla viene vacío, calculamos el nombre del archivo 
+                  // basándonos en la hora del servidor para ir a buscarlo directamente al bucket
                   String? urlFinalFoto;
                   if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty) {
                     urlFinalFoto = SupabaseService.storage.from('asistencias_selfies').getPublicUrl(selfieUrlCampo);
+                  } else {
+                    // Alternativa: Si la base de datos lo borró, intentamos armar la ruta con el timestamp del evento
+                    final String nombreArchivoEstimado = "asistencias/${f.millisecondsSinceEpoch}.jpg";
+                    urlFinalFoto = SupabaseService.storage.from('asistencias_selfies').getPublicUrl(nombreArchivoEstimado);
                   }
+
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8.0),
@@ -836,15 +844,14 @@ class _AdminPageState extends State<AdminPage> {
                         width: 40,
                         height: 40,
                         decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.teal),
-                        child: ClipOval(
-                          child: urlFinalFoto != null
-                              ? Image.network(
-                                  urlFinalFoto,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Colors.white, size: 18),
-                                )
-                              : const Icon(Icons.person, color: Colors.white, size: 18),
+                                                child: ClipOval(
+                          child: Image.network(
+                            urlFinalFoto,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Colors.white, size: 18),
+                          ),
                         ),
+
                       ),
                       title: Text(nombreTrabajador, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       subtitle: Text(
