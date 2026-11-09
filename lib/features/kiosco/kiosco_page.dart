@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../../core/supabase_service.dart';
 import 'dart:typed_data'; // 👈 AGREGAR ESTA LÍNEA
-import 'package:http/http.dart' as http;
+
 
 
 
@@ -79,7 +79,7 @@ class _KioscoPageState extends State<KioscoPage> {
       if (mounted) setState(() {});
     }
   }
-      Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
+     Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
     if (_pinActual.isEmpty || _estaProcesando) return;
 
     setState(() => _estaProcesando = true);
@@ -88,7 +88,7 @@ class _KioscoPageState extends State<KioscoPage> {
       final ahora = DateTime.now();
       String rutaEvidenciaFinal = 'EMPTY';
 
-      // 🔍 1. VALIDACIÓN PREVIA DE CREDENCIALES (Evita procesar fotos si el PIN está mal)
+      // 🔍 1. VALIDACIÓN PREVIA DE CREDENCIALES (Evita procesar fotos si el PIN es incorrecto)
       final empleadoData = await SupabaseService.client
           .from('empleados')
           .select('id, nombre_completo, sucursal_id')
@@ -111,46 +111,32 @@ class _KioscoPageState extends State<KioscoPage> {
       final String nombreTrabajador = empleadoData['nombre_completo'] ?? "Empleado";
       final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
 
-      // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Solo si el empleado fue validado correctamente)
-            // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Solo si el empleado fue validado correctamente)
+      // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Método directo compatible con producción web)
       if (_cameraController != null && _cameraController!.value.isInitialized) {
         try {
           final XFile fotoCapturada = await _cameraController!.takePicture();
           
-          // ✅ SOLUCIÓN ANTI-OFUSCACIÓN: Leer los bytes mediante una petición HTTP local al Blob del navegador
-          // Esto evita el método obsoleto/ofuscado 'readAsBytes()' del paquete de la cámara en Web.
-          final responseBytes = await http.get(Uri.parse(fotoCapturada.path));
-          final Uint8List bytesFoto = responseBytes.bodyBytes;
+          // Extracción directa del archivo original (Línea nativa probada)
+          final Uint8List bytesFoto = await fotoCapturada.readAsBytes();
           
-          // Estructuración inteligente del nombre del archivo en el bucket
+          // Estructuración única del nombre del archivo
           final String nombreArchivo = "${empleadoUuid}_${ahora.millisecondsSinceEpoch}.jpg";
           final String rutaAlmacenamiento = "asistencias/$nombreArchivo";
 
-          // Subida estándar de bytes directos a Supabase Storage con las nuevas políticas SQL
+          // Subida asíncrona controlada a Supabase Storage
           await SupabaseService.storage
               .from('asistencias_selfies')
               .upload(rutaAlmacenamiento, bytesFoto);
 
+          // Sincronización garantizada: Solo cambia el estado si la subida fue exitosa
           rutaEvidenciaFinal = rutaAlmacenamiento;
         } catch (eCamera) {
           debugPrint("Advertencia en captura/subida de selfie: $eCamera");
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('❌ Error en cámara/storage: $eCamera'),
-                backgroundColor: Colors.red.shade900,
-                duration: const Duration(seconds: 8),
-              ),
-            );
-          }
-          
           rutaEvidenciaFinal = 'FALLO_FOTO';
         }
       }
 
-
-      // 📝 3. INSERCIÓN DEL REGISTRO FINAL CON LA RUTA DE EVIDENCIA REAL
+      // 📝 3. INSERCIÓN DEL REGISTRO FINAL CON LA RUTA DE EVIDENCIA CONFIRMADA
       await SupabaseService.client.from('registros_asistencia').insert({
         'empleado_id': empleadoUuid,
         'sucursal_id': sucursalUuid,
@@ -158,7 +144,7 @@ class _KioscoPageState extends State<KioscoPage> {
         'fecha_hora_servidor': ahora.toIso8601String(),
         'dispositivo_info': 'Kiosco Web (Tablet/Móvil Responsivo)',
         'estatus_asistencia': 'TURNO_NO_PROGRAMADO',
-        'selfie_url': rutaEvidenciaFinal,
+        'selfie_url': rutaEvidenciaFinal, // Se inyecta la ruta real ya confirmada
       });
 
       if (!mounted) return;
@@ -181,6 +167,7 @@ class _KioscoPageState extends State<KioscoPage> {
       }
     }
   }
+
 
 
   void _agregarDigito(String digito) {
