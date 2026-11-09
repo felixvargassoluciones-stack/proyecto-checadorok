@@ -825,6 +825,72 @@ class _AdminPageState extends State<AdminPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 🔍 BARRA DE FILTRADO SUPERIOR COMPACTA TIPO EXCEL
+        Container(
+          padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 12), // 👈 Corrección: Usar .only
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Color(0xffe2e8f0)), // 👈 Corrección: Quitar const antes de Color
+          ),
+
+          child: Row(
+            children: [
+              // Filtro por Nombre o Nómina
+              Expanded(
+                flex: 2,
+                child: TextFormField(
+                  controller: _buscarExcelController,
+                  onChanged: (value) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: '🔍 Buscar por Nombre o Nómina...',
+                    hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
+                    prefixIcon: const Icon(Icons.search, size: 16, color: Colors.grey),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Filtro de Rango de Fechas (Aprovechando _rangoFechas del archivo)
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  backgroundColor: Colors.teal.shade50,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                icon: const Icon(Icons.date_range, size: 16, color: Colors.teal),
+                label: Text(
+                  'Rango: ${_rangoFechas.start.day}/${_rangoFechas.start.month} al ${_rangoFechas.end.day}/${_rangoFechas.end.month}',
+                  style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+                onPressed: () async {
+                  final DateTimeRange? nuevoRango = await showDateRangePicker(
+                    context: context,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    initialDateRange: _rangoFechas,
+                    builder: (context, child) => Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: const ColorScheme.light(primary: Colors.teal, onPrimary: Colors.white),
+                      ),
+                      child: child!,
+                    ),
+                  );
+                  if (nuevoRango != null) {
+                    setState(() {
+                      // El cambio disparará automáticamente la actualización del StreamBuilder
+                      // manipulando el estado interno ya configurado en tu constructor
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
         const Text(
           'MONITOREO DE ASISTENCIAS EN TIEMPO REAL - VISTA CORPORATIVA', 
           style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 0.5)
@@ -837,21 +903,43 @@ class _AdminPageState extends State<AdminPage> {
                 .stream(primaryKey: ['id'])
                 .order('fecha_hora_servidor', ascending: false)
                 .map((maps) {
-                  final listaFiltrada = maps.where((registro) {
+                  final String busqueda = _buscarExcelController.text.trim().toLowerCase();
+                  
+                  return maps.where((registro) {
                     final fServidor = DateTime.parse(registro['fecha_hora_servidor']);
-                    return fServidor.isAfter(_rangoFechas.start.subtract(const Duration(days: 1))) && 
-                           fServidor.isBefore(_rangoFechas.end.add(const Duration(days: 1)));
+                    final String empleadoId = registro['empleado_id']?.toString() ?? '';
+
+                    // Filtrado estricto por rango de fechas seleccionado
+                    final bool dentroDeFecha = fServidor.isAfter(_rangoFechas.start.subtract(const Duration(days: 1))) && 
+                                               fServidor.isBefore(_rangoFechas.end.add(const Duration(days: 1)));
+                    
+                    if (!dentroDeFecha) return false;
+
+                    // Si no hay texto de búsqueda, pasa el filtro de fecha directamente
+                    if (busqueda.isEmpty) return true;
+
+                    // Cruce en memoria en caliente para filtrar dinámicamente por nombre o nómina
+                    Map<String, dynamic>? emp;
+                    try {
+                      emp = _empleadosRegistrados.firstWhere((e) => e['id'].toString() == empleadoId);
+                    } catch (_) {
+                      emp = null;
+                    }
+
+                    if (emp == null) return false;
+                    final String nombre = (emp['nombre_completo'] ?? '').toString().toLowerCase();
+                    final String nomina = (emp['numero_empleado'] ?? '').toString().toLowerCase();
+
+                    return nombre.contains(busqueda) || nomina.contains(busqueda);
                   }).toList();
-                  return List<Map<String, dynamic>>.from(listaFiltrada);
                 }),
             builder: (context, snapshot) {
               if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(fontSize: 12)));
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.teal));
               
               final registros = snapshot.data ?? [];
-              if (registros.isEmpty) return const Center(child: Text('Sin checadas registradas en el rango seleccionado.', style: TextStyle(fontSize: 13)));
+              if (registros.isEmpty) return const Center(child: Text('Sin checadas registradas en el rango seleccionado o coincidencia.', style: TextStyle(fontSize: 13)));
               
-              // 📊 ENVOLTORIO DE DESPLAZAMIENTO BIDIRECCIONAL (Efecto Hoja de Cálculo Excel)
               return Container(
                 decoration: BoxDecoration(
                   color: Colors.white, 
@@ -864,7 +952,6 @@ class _AdminPageState extends State<AdminPage> {
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       headingRowColor: WidgetStateProperty.all(Colors.blueGrey.shade50),
-
                       dataRowMinHeight: 46,
                       dataRowMaxHeight: 52,
                       horizontalMargin: 16,
@@ -882,6 +969,7 @@ class _AdminPageState extends State<AdminPage> {
                         DataColumn(label: Text('ESTATUS LEY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                       ],
+
                       rows: registros.map((r) {
                         final f = DateTime.parse(r['fecha_hora_servidor']);
                         final String empleadoId = r['empleado_id']?.toString() ?? '';
