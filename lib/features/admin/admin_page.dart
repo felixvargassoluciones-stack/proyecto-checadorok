@@ -486,13 +486,60 @@ class _AdminPageState extends State<AdminPage> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('🗑️ Registro de "$nombre" eliminado.'), backgroundColor: Colors.red.shade800));
       if (_empleadoIdEdicion == id) _cancelarEdicion();
       await _cargarListaEmpleadosExcel();
-    } catch (e) {
+        } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+    }
+  } // 👈 Esta es la llave de cierre de _eliminarEmpleado (Línea 393)
+
+  // 🌟 PEGAR AQUÍ LA NUEVA FUNCIÓN DE ASISTENCIA INDIVIDUAL:
+  Future<void> _eliminarRegistroAsistencia(String id, String nombreEmpleado, String tipo) async {
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('⚠️ ¿Eliminar Registro?', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text('¿Estás seguro de que deseas eliminar permanentemente el registro de $tipo para "$nombreEmpleado"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sí, Eliminar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    try {
+      await SupabaseService.client.from('registros_asistencia').delete().eq('id', id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🗑️ Registro de asistencia eliminado con éxito.'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al eliminar registro: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
-  void _activarModoEdicion(Map<String, dynamic> emp) {
+  void _activarModoEdicion(Map<String, dynamic> emp) { // 👈 Aquí inicia la siguiente función original (Línea 395)
     setState(() {
+
       _empleadoIdEdicion = emp['id'].toString();
       _nombreController.text = emp['nombre_completo'] ?? '';
       _numeroEmpleadoController.text = emp['numero_empleado']?.toString() ?? '';
@@ -835,41 +882,85 @@ class _AdminPageState extends State<AdminPage> {
 
 
 
-                  return Card(
+                                   return Card(
                     margin: const EdgeInsets.only(bottom: 8.0),
                     elevation: 0, 
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: Color(0xffe2e8f0))),
                     child: ListTile(
-                      // Renderizado dinámico de la foto: Si existe URL muestra la imagen, si no, el icono genérico
-                      leading: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.teal),
-                                                     child: ClipOval(
-                          child: urlFinalFoto != null
-                              ? Image.network(
-                                  urlFinalFoto,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Colors.white, size: 18),
-                                )
-                              : const Icon(Icons.person, color: Colors.white, size: 18),
+                      // 🌟 INTERACTIVIDAD: Clic en la foto para abrir vista previa ampliada
+                      leading: GestureDetector(
+                        onTap: urlFinalFoto == null ? null : () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => Dialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              clipBehavior: Clip.antiAlias,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  AppBar(
+                                    backgroundColor: Colors.teal,
+                                    title: Text('VERIFICACIÓN: $nombreTrabajador', style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold)),
+                                    automaticallyImplyLeading: false,
+                                    actions: [IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context))],
+                                  ),
+                                  Container(
+                                    constraints: const BoxConstraints(maxWidth: 400, maxHeight: 400),
+                                    child: Image.network(
+                                      urlFinalFoto!,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (context, error, stackTrace) => const Center(child: Padding(padding: EdgeInsets.all(20.0), child: Text('No se pudo cargar la imagen.'))),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.teal),
+                          child: ClipOval(
+                            child: urlFinalFoto != null
+                                ? Image.network(
+                                    urlFinalFoto,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Colors.white, size: 18),
+                                  )
+                                : const Icon(Icons.person, color: Colors.white, size: 18),
+                          ),
                         ),
-
-
                       ),
                       title: Text(nombreTrabajador, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       subtitle: Text(
                         'Nómina: $nominaTrabajador  •  Cargo: $cargoTrabajador  •  Hora: ${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}',
                         style: const TextStyle(fontSize: 12, color: Colors.black54),
                       ),
-                      trailing: Chip(
-                        label: Text(
-                          r['tipo_evento'] ?? 'ENTRADA', 
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Chip(
+                            label: Text(
+                              r['tipo_evento'] ?? 'ENTRADA', 
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // 🌟 NUEVO BOTÓN: Eliminar marcaje de asistencia individual
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                            onPressed: () => _eliminarRegistroAsistencia(
+                              r['id'].toString(), 
+                              nombreTrabajador, 
+                              r['tipo_evento'] ?? 'ASISTENCIA'
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
+
                 },
               );
             },
