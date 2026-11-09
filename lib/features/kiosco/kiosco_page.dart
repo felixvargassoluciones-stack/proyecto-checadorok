@@ -1,12 +1,8 @@
-import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/supabase_service.dart';
-
-
-
-
-
 
 class KioscoPage extends StatefulWidget {
   const KioscoPage({super.key});
@@ -16,277 +12,292 @@ class KioscoPage extends StatefulWidget {
 }
 
 class _KioscoPageState extends State<KioscoPage> {
+  String _pinIngresado = '';
   CameraController? _cameraController;
-  final TextEditingController _pinController = TextEditingController();
-  bool _estaProcesando = false;
-  bool _inicializandoCamara = false;
-  String _pinActual = "";
-  Timer? _relojTimer;
-  String _horaDigital = "00:00:00";
+  bool _camaraInicializada = false;
+
   @override
   void initState() {
     super.initState();
-    _iniciarReloj();
+    _configurarCamara();
+  }
+
+  /// Inicializa la cámara frontal del dispositivo/tablet
+  Future<void> _configurarCamara() async {
+    try {
+      final camaras = await availableCameras();
+      if (camaras.isEmpty) return;
+
+      final camaraFrontal = camaras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => camaras.first,
+      );
+
+      _cameraController = CameraController(
+        camaraFrontal,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
+
+      await _cameraController!.initialize();
+      if (mounted) {
+        setState(() {
+          _camaraInicializada = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al inicializar la cámara: $e');
+    }
+  }
+
+  void _presionarTecla(String texto) {
+    if (_pinIngresado.length < 6) {
+      setState(() => _pinIngresado += texto);
+    }
+  }
+
+  void _borrarTecla() {
+    if (_pinIngresado.isNotEmpty) {
+      setState(() => _pinIngresado = _pinIngresado.substring(0, _pinIngresado.length - 1));
+    }
+  }
+  /// Procesa el checado real subiendo la selfie e insertando en Supabase
+  void _procesarChecado(String tipoEvento) async {
+    if (_pinIngresado.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor, ingresa tu número de empleado')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+    );
+
+    try {
+      final datosEmpleado = await SupabaseService.client
+          .from('empleados')
+          .select('id, pin_acceso, nombre_completo, sucursal_id')
+          .eq('numero_empleado', _pinIngresado)
+          .eq('activo', true)
+          .maybeSingle();
+
+      if (datosEmpleado == null) {
+        if (!mounted) return;
+        Navigator.pop(context);
+        _mostrarAlerta('Error', 'El número de empleado no existe o está inactivo.');
+        return;
+      }
+
+      if (_cameraController == null || !_cameraController!.value.isInitialized) {
+        if (!mounted) return;
+        Navigator.pop(context);
+        _mostrarAlerta('Error de Hardware', 'La cámara no está lista. Inténtalo de nuevo.');
+        return;
+      }
+
+      final XFile file = await _cameraController!.takePicture();
+      final Uint8List bytesFoto = await file.readAsBytes();
+
+      final String nombreArchivo = '${DateTime.now().millisecondsSinceEpoch}_${datosEmpleado['id']}.jpg';
+      final String rutaStorage = 'asistencias/$nombreArchivo';
+
+      await SupabaseService.storage.from('asistencias_selfies').uploadBinary(
+            rutaStorage,
+            bytesFoto,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+          );
+
+      final String urlPublicaSelfie = SupabaseService.storage
+          .from('asistencias_selfies')
+          .getPublicUrl(rutaStorage);
+
+      await SupabaseService.client.from('registros_asistencia').insert({
+        'empleado_id': datosEmpleado['id'],
+        'sucursal_id': datosEmpleado['sucursal_id'],
+        'tipo_evento': tipoEvento,
+        'selfie_url': urlPublicaSelfie,
+        'dispositivo_info': 'Kiosco Web (Tablet Corporativa)',
+      });
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      _mostrarAlerta(
+        '¡Registro Exitoso!',
+        'Hola ${datosEmpleado['nombre_completo']},\nse ha registrado tu $tipoEvento con éxito.',
+        limpiarPin: true,
+      );
+
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      _mostrarAlerta('Error de Conexión', 'No se pudo guardar el registro: $e');
+    }
+  }
+
+  void _mostrarAlerta(String titulo, String mensaje, {bool limpiarPin = false}) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+        content: Text(mensaje, style: const TextStyle(fontSize: 16)),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              if (limpiarPin) {
+                setState(() => _pinIngresado = '');
+              }
+            },
+            child: const Text('Aceptar', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _relojTimer?.cancel();
-    _pinController.dispose();
     _cameraController?.dispose();
     super.dispose();
   }
 
-  void _iniciarReloj() {
-    _relojTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      final ahora = DateTime.now();
-      if (mounted) {
-        setState(() {
-          _horaDigital = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')}:${ahora.second.toString().padLeft(2, '0')}";
-        });
-      }
-    });
-  }
-  Future<void> _inicializarCamaraFrontal() async {
-    if (_cameraController != null || _inicializandoCamara) return;
-    setState(() => _inicializandoCamara = true);
-    try {
-      final camaras = await availableCameras();
-      if (camaras.isEmpty) return;
-      final camaraFrontal = camaras.firstWhere(
-        (camara) => camara.lensDirection == CameraLensDirection.front,
-        orElse: () => camaras.first,
-      );
-      _cameraController = CameraController(
-        camaraFrontal, 
-        ResolutionPreset.medium, 
-        enableAudio: false
-      );
-      await _cameraController!.initialize();
-      if (mounted) setState(() {});
-    } catch (e) {
-      debugPrint("Error al encender la cámara: $e");
-    } finally {
-      if (mounted) setState(() => _inicializandoCamara = false);
-    }
-  }
-
-  void _apagarCamara() {
-    if (_cameraController != null) {
-      _cameraController!.dispose();
-      _cameraController = null;
-      if (mounted) setState(() {});
-    }
-  }
-      Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
-    if (_pinActual.isEmpty || _estaProcesando) return;
-
-    setState(() => _estaProcesando = true);
-    
-    try {
-      final ahora = DateTime.now();
-      String rutaEvidenciaFinal = 'EMPTY';
-
-      // 🔍 1. VALIDACIÓN PREVIA DE CREDENCIALES (Evita procesar fotos si el PIN está mal)
-      final empleadoData = await SupabaseService.client
-          .from('empleados')
-          .select('id, nombre_completo, sucursal_id')
-          .eq('pin_acceso', _pinActual)
-          .maybeSingle();
-
-      if (empleadoData == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ PIN de acceso incorrecto. Trabajador no encontrado.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        _limpiarPin();
-        return;
-      }
-
-      final String empleadoUuid = empleadoData['id'].toString();
-      final String nombreTrabajador = empleadoData['nombre_completo'] ?? "Empleado";
-      final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
-
-      // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Solo si el empleado fue validado correctamente)
-            // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Solo si el empleado fue validado correctamente)
-            // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Uso del XFile directo para compatibilidad Web total)
-      if (_cameraController != null && _cameraController!.value.isInitialized) {
-        try {
-          // Captura limpia del archivo temporal en el navegador
-          final XFile fotoCapturada = await _cameraController!.takePicture();
-          
-          // Estructuración controlada del nombre del archivo en el bucket
-          final String nombreArchivo = "${empleadoUuid}_${ahora.millisecondsSinceEpoch}.jpg";
-          final String rutaAlmacenamiento = "asistencias/$nombreArchivo";
-
-          // Subida nativa del XFile directo al Storage eludiendo la ofuscación de bytes
-          await SupabaseService.client.storage
-              .from('asistencias_selfies')
-              .upload(rutaAlmacenamiento, fotoCapturada);
-
-          // Asignación garantizada tras el éxito en la transferencia
-          rutaEvidenciaFinal = rutaAlmacenamiento;
-        } catch (eCamera) {
-          debugPrint("Advertencia en captura/subida de selfie: $eCamera");
-          rutaEvidenciaFinal = 'FALLO_FOTO';
-        }
-      }
-
-
-
-      // 📝 3. INSERCIÓN DEL REGISTRO FINAL CON LA RUTA DE EVIDENCIA REAL
-      await SupabaseService.client.from('registros_asistencia').insert({
-        'empleado_id': empleadoUuid,
-        'sucursal_id': sucursalUuid,
-        'tipo_evento': tipoEvento,
-        'fecha_hora_servidor': ahora.toIso8601String(),
-        'dispositivo_info': 'Kiosco Web (Tablet/Móvil Responsivo)',
-        'estatus_asistencia': 'TURNO_NO_PROGRAMADO',
-        'selfie_url': rutaEvidenciaFinal,
-      });
-
-      if (!mounted) return;
-
-      _mostrarDialogoExito(
-        nombreEmpleado: nombreTrabajador,
-        tipoEvento: tipoEvento,
-      );
-
-      _limpiarPin();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error de conexión con Supabase: $e'), backgroundColor: Colors.red),
-      );
-      _apagarCamara();
-    } finally {
-      if (mounted) {
-        setState(() => _estaProcesando = false);
-      }
-    }
-  }
-
-
-  void _agregarDigito(String digito) {
-    if (_pinActual.length >= 4) return;
-    setState(() {
-      _pinActual += digito;
-      _pinController.text = _pinActual;
-    });
-    if (_pinActual.length == 1) {
-      _inicializarCamaraFrontal();
-    }
-  }
-
-  void _limpiarPin() {
-    setState(() {
-      _pinActual = "";
-      _pinController.text = "";
-    });
-    _apagarCamara();
-  }
-
-  void _solicitarConfirmacionMarcaje(String tipoEvento) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('⚠️ Confirmar Registro', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, fontSize: 22)),
-          content: Text('¿Estás seguro de que deseas registrar tu $tipoEvento en este momento?', style: const TextStyle(fontSize: 18, color: Colors.black87)),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 16))),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
-              onPressed: () {
-                Navigator.of(context).pop();
-                _procesarMarcajeAsistencia(tipoEvento);
-              },
-              child: const Text('Sí, Registrar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-  void _mostrarDialogoExito({required String nombreEmpleado, required String tipoEvento}) {
-    final ahora = DateTime.now();
-    final horaChecado = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')}";
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(children: [Icon(Icons.check_circle, color: Colors.teal, size: 34), SizedBox(width: 12), Text('¡Registro Exitoso!', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 24))]),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Hola $nombreEmpleado,', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2D3748))),
-              const SizedBox(height: 14),
-              RichText(text: TextSpan(style: const TextStyle(fontSize: 18, color: Colors.black87, height: 1.5), children: [const TextSpan(text: 'se ha registrado tu '), TextSpan(text: tipoEvento, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)), const TextSpan(text: ' con éxito a las '), TextSpan(text: '$horaChecado hrs.', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2D3748)))]))
-            ],
-          ),
-          actions: [TextButton(onPressed: () { Navigator.of(context).pop(); _apagarCamara(); }, child: const Text('Aceptar', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 18)))],
-        );
-      },
-    );
-  }
-  Widget _buildSeccionVisual() {
-    return Container(
-      color: const Color(0xFF0D5C46), width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('VALIDACIÓN VISUAL', style: TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-        const SizedBox(height: 8),
-        Text(_horaDigital, style: const TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2)),
-        const SizedBox(height: 12),
-        Container(width: 150, height: 150, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _cameraController != null ? Colors.tealAccent : Colors.white24, width: 4)), child: ClipOval(child: _estaProcesando || _inicializandoCamara ? const Padding(padding: EdgeInsets.all(45.0), child: CircularProgressIndicator(color: Colors.white)) : (_cameraController != null && _cameraController!.value.isInitialized ? CameraPreview(_cameraController!) : Container(color: const Color(0xFF114232), child: const Icon(Icons.photo_camera_front_outlined, color: Colors.white38, size: 55))))),
-        const SizedBox(height: 10),
-        Text(_cameraController != null ? '📷 Cámara Activa' : '💤 Sensor en reposo.', style: TextStyle(color: _cameraController != null ? Colors.tealAccent : Colors.white60, fontSize: 13, fontStyle: FontStyle.italic))
-      ]),
-    );
-  }
-  Widget _buildTecladoNumerico() {
-    final List<String> botones = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'];
-    return GridView.builder(
-      shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: botones.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 1.5, crossAxisSpacing: 12, mainAxisSpacing: 12),
-      itemBuilder: (context, index) {
-        final boton = botones[index]; final bool esEspecial = boton == 'C' || boton == '⌫';
-        return ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: esEspecial ? Colors.blueGrey : Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.grey))),
-          onPressed: () {
-            if (boton == 'C') { _limpiarPin(); }
-            else if (boton == '⌫') { if (_pinActual.isNotEmpty) { setState(() { _pinActual = _pinActual.substring(0, _pinActual.length - 1); _pinController.text = _pinActual; }); if (_pinActual.isEmpty) { _apagarCamara(); } } }
-            else { _agregarDigito(boton); }
-          },
-          child: Text(boton, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: esEspecial ? Colors.white : const Color(0xFF2D3748))),
-        );
-      },
-    );
-  }
-
-  Widget _buildBotonIncidencia(String titulo, Color color, String tipo) {
-    return SizedBox(width: double.infinity, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: color, padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 2), onPressed: _pinActual.length < 4 ? null : () => _solicitarConfirmacionMarcaje(tipo), child: Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5))));
-  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: _estaProcesando
-            ? const Center(child: CircularProgressIndicator(color: Colors.teal))
-            : LayoutBuilder(builder: (context, constraints) {
-                return Column(children: [
-                  _buildSeccionVisual(),
-                  Expanded(child: SingleChildScrollView(physics: const AlwaysScrollableScrollPhysics(), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0), child: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: _pinController, readOnly: true, obscureText: true, textAlign: TextAlign.center, style: const TextStyle(fontSize: 28, letterSpacing: 16, fontWeight: FontWeight.bold), decoration: InputDecoration(hintText: '••••', hintStyle: const TextStyle(color: Colors.black26, letterSpacing: 16), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(vertical: 12))), const SizedBox(height: 16), _buildTecladoNumerico(), const SizedBox(height: 24), Column(children: [_buildBotonIncidencia('-> ENTRADA', const Color(0xFF2E7D32), 'ENTRADA'), const SizedBox(height: 12), _buildBotonIncidencia('SALIDA COMER', const Color(0xFFE65100), 'SALIDA A COMER'), const SizedBox(height: 12), _buildBotonIncidencia('REGRESO COMER', const Color(0xFF1565C0), 'REGRESO DE COMER'), const SizedBox(height: 12), _buildBotonIncidencia('-> SALIDA', const Color(0xFFC62828), 'SALIDA FIN DE TURNO')])]))))
-                ]);
-              }),
+      backgroundColor: Colors.white,
+      body: Row(
+        children: [
+          Expanded(
+            flex: 4,
+            child: Container(
+              color: Colors.teal,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'VALIDACIÓN VISUAL',
+                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 2),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    width: 280,
+                    height: 280,
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _camaraInicializada
+                        ? CameraPreview(_cameraController!)
+                        : const Center(child: CircularProgressIndicator(color: Colors.white)),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Asegúrate de que tu rostro sea visible',
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 5,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 20.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _pinIngresado.isEmpty ? '--- ---' : _pinIngresado,
+                    style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.teal),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      SizedBox(
+                        width: 240,
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                          ),
+                          itemCount: 12,
+                          itemBuilder: (context, index) {
+                            String textoBoton = '';
+                            if (index < 9) textoBoton = '${index + 1}';
+                            if (index == 9) textoBoton = 'C'; 
+                            if (index == 10) textoBoton = '0';
+                            if (index == 11) textoBoton = '⌫'; 
+                            
+                            return ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: textoBoton == 'C' || textoBoton == '⌫' ? Colors.grey : Colors.white,
+                                foregroundColor: Colors.teal,
+                                elevation: 1,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onPressed: () {
+                                if (textoBoton == 'C') {
+                                  setState(() => _pinIngresado = '');
+                                } else if (textoBoton == '⌫') {
+                                  _borrarTecla();
+                                } else {
+                                  _presionarTecla(textoBoton);
+                                }
+                              },
+                              child: Text(textoBoton, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                            );
+                          },
+                        ),
+                      ),
+                      Column(
+                        children: [
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, fixedSize: const Size(180, 50)),
+                            onPressed: () => _procesarChecado('ENTRADA'),
+                            icon: const Icon(Icons.login),
+                            label: const Text('ENTRADA'),
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, fixedSize: const Size(180, 50)),
+                            onPressed: () => _procesarChecado('SALIDA_COMER'),
+                            icon: const Icon(Icons.restaurant),
+                            label: const Text('SALIDA COMER'),
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.white, fixedSize: const Size(180, 50)),
+                            onPressed: () => _procesarChecado('REGRESO_COMER'),
+                            icon: const Icon(Icons.restaurant_menu),
+                            label: const Text('REGRESO COMER'),
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, fixedSize: const Size(180, 50)),
+                            onPressed: () => _procesarChecado('SALIDA'),
+                            icon: const Icon(Icons.logout),
+                            label: const Text('SALIDA FINAL'),
+                          ),
+                        ],
+                      )
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
