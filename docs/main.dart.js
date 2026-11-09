@@ -46278,14 +46278,14 @@ $1$end(a){return this.G(this,A.E("call","$1$end",0,[a],["end"],0))},
 $1$line(a){return this.G(this,A.E("call","$1$line",0,[a],["line"],0))},
 $2$color(a,b){return this.G(this,A.E("call","$2$color",0,[a,b],["color"],0))},
 $2$withDrive(a,b){return this.G(this,A.E("call","$2$withDrive",0,[a,b],["withDrive"],0))},
+$1$2$retryIf(a,b,c){return this.G(this,A.E("call","$1$2$retryIf",0,[a,b,c],["retryIf"],1))},
+$1$isTakingPicture(a){return this.G(this,A.E("call","$1$isTakingPicture",0,[a],["isTakingPicture"],0))},
 $3$composing$selection$text(a,b,c){return this.G(this,A.E("call","$3$composing$selection$text",0,[a,b,c],["composing","selection","text"],0))},
 $3$2$headers$maybeSingle(a,b,c,d,e){return this.G(this,A.E("call","$3$2$headers$maybeSingle",0,[a,b,c,d,e],["headers","maybeSingle"],3))},
 $9$body$count$headers$httpClient$isolate$maybeSingle$method$schema$url(a,b,c,d,e,f,g,h,i){return this.G(this,A.E("call","$9$body$count$headers$httpClient$isolate$maybeSingle$method$schema$url",0,[a,b,c,d,e,f,g,h,i],["body","count","headers","httpClient","isolate","maybeSingle","method","schema","url"],0))},
 $1$url(a){return this.G(this,A.E("call","$1$url",0,[a],["url"],0))},
 $1$queryParameters(a){return this.G(this,A.E("call","$1$queryParameters",0,[a],["queryParameters"],0))},
 $3$2$method$url(a,b,c,d,e){return this.G(this,A.E("call","$3$2$method$url",0,[a,b,c,d,e],["method","url"],3))},
-$1$2$retryIf(a,b,c){return this.G(this,A.E("call","$1$2$retryIf",0,[a,b,c],["retryIf"],1))},
-$1$isTakingPicture(a){return this.G(this,A.E("call","$1$isTakingPicture",0,[a],["isTakingPicture"],0))},
 $2$bottom$top(a,b){return this.G(this,A.E("call","$2$bottom$top",0,[a,b],["bottom","top"],0))},
 $2$left$right(a,b){return this.G(this,A.E("call","$2$left$right",0,[a,b],["left","right"],0))},
 $2$hitTest$paintTransform(a,b){return this.G(this,A.E("call","$2$hitTest$paintTransform",0,[a,b],["hitTest","paintTransform"],0))},
@@ -101871,55 +101871,56 @@ break}m.S(new A.aAJ(m))
 p=4
 l=new A.bA(Date.now(),0,!1)
 k="EMPTY"
-a0=m.d
-s=a0!=null&&a0.a.a?7:8
-break
-case 7:p=10
-s=13
-return A.m(a0.na(),$async$nL)
-case 13:j=a8
-s=14
-return A.m(j.P5(),$async$nL)
-case 14:i=a8
-h=""+l.a+".jpg"
-g="asistencias/"+A.j(h)
-a0=$.d2.aH().ay
-a0===$&&A.a()
-s=15
-return A.m(a0.dG("asistencias_selfies").G4(g,i),$async$nL)
-case 15:k=g
-p=4
-s=12
-break
-case 10:p=9
-a4=o.pop()
-f=A.T(a4)
-A.aIv().$1("Advertencia en captura/subida de selfie: "+A.j(f))
-s=12
-break
-case 9:s=4
-break
-case 12:case 8:s=16
+s=7
 return A.m($.d2.aH().dG("empleados").hK("id, nombre_completo, sucursal_id").hY("pin_acceso",m.w).yw(),$async$nL)
-case 16:e=a8
-if(e==null){a0=m.c
+case 7:j=a8
+if(j==null){a0=m.c
 if(a0==null){n=[1]
 s=5
 break}a0.a0(t.J).f.fe(B.Xp)
 m.JA()
 n=[1]
 s=5
-break}d=J.bg(e.h(0,"id"))
-a2=e.h(0,"nombre_completo")
-c=a2==null?"Empleado":a2
-a3=e.h(0,"sucursal_id")
-b=a3==null?"91995ded-ff29-41b7-8198-08ca6cb94fb3":a3
-a0=t.N
+break}i=J.bg(j.h(0,"id"))
+a1=j.h(0,"nombre_completo")
+h=a1==null?"Empleado":a1
+a2=j.h(0,"sucursal_id")
+g=a2==null?"91995ded-ff29-41b7-8198-08ca6cb94fb3":a2
+a0=m.d
+s=a0!=null&&a0.a.a?8:9
+break
+case 8:p=11
+s=14
+return A.m(a0.na(),$async$nL)
+case 14:f=a8
+s=15
+return A.m(f.P5(),$async$nL)
+case 15:e=a8
+d=A.j(i)+"_"+l.a+".jpg"
+c="asistencias/"+A.j(d)
+a0=$.d2.aH().ay
+a0===$&&A.a()
+s=16
+return A.m(a0.dG("asistencias_selfies").G4(c,e),$async$nL)
+case 16:k=c
+p=4
+s=13
+break
+case 11:p=10
+a4=o.pop()
+b=A.T(a4)
+A.aIv().$1("Advertencia en captura/subida de selfie: "+A.j(b))
+k="FALLO_FOTO"
+s=13
+break
+case 10:s=4
+break
+case 13:case 9:a0=t.N
 s=17
-return A.m($.d2.aH().dG("registros_asistencia").iH(0,A.a_(["empleado_id",d,"sucursal_id",b,"tipo_evento",a6,"fecha_hora_servidor",l.uQ(),"dispositivo_info","Kiosco Web (Tablet/M\xf3vil Responsivo)","estatus_asistencia","TURNO_NO_PROGRAMADO","selfie_url",k],a0,a0)),$async$nL)
+return A.m($.d2.aH().dG("registros_asistencia").iH(0,A.a_(["empleado_id",i,"sucursal_id",g,"tipo_evento",a6,"fecha_hora_servidor",l.uQ(),"dispositivo_info","Kiosco Web (Tablet/M\xf3vil Responsivo)","estatus_asistencia","TURNO_NO_PROGRAMADO","selfie_url",k],a0,a0)),$async$nL)
 case 17:if(m.c==null){n=[1]
 s=5
-break}m.ao9(c,a6)
+break}m.ao9(h,a6)
 m.JA()
 n.push(6)
 s=5

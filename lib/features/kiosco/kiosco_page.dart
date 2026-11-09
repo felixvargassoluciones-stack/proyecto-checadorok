@@ -76,7 +76,7 @@ class _KioscoPageState extends State<KioscoPage> {
       if (mounted) setState(() {});
     }
   }
-    Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
+      Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
     if (_pinActual.isEmpty || _estaProcesando) return;
 
     setState(() => _estaProcesando = true);
@@ -85,35 +85,7 @@ class _KioscoPageState extends State<KioscoPage> {
       final ahora = DateTime.now();
       String rutaEvidenciaFinal = 'EMPTY';
 
-      // 📷 CAPTURA AUTOMATIZADA DE EVIDENCIA EN MEMORIA
-            // 📷 CAPTURA AUTOMATIZADA DE EVIDENCIA EN MEMORIA
-            // 📷 CAPTURA AUTOMATIZADA DE EVIDENCIA COMPATIBLE CON FLUTTER WEB
-            if (_cameraController != null && _cameraController!.value.isInitialized) {
-        try {
-          final XFile fotoCapturada = await _cameraController!.takePicture();
-          
-          // 🌐 Extracción de bytes nativa y directa para la Web
-          final Uint8List bytesFoto = await fotoCapturada.readAsBytes();
-          
-          // Nombre único usando la marca de tiempo para evitar colisiones
-          final String nombreArchivo = "${ahora.millisecondsSinceEpoch}.jpg";
-          final String rutaAlmacenamiento = "asistencias/$nombreArchivo";
-
-          // Subida estándar de bytes a Supabase Storage
-          await SupabaseService.storage
-              .from('asistencias_selfies')
-              .upload(rutaAlmacenamiento, bytesFoto);
-
-          rutaEvidenciaFinal = rutaAlmacenamiento;
-        } catch (eCamera) {
-          debugPrint("Advertencia en captura/subida de selfie: $eCamera");
-        }
-      }
-
-
-
-
-      // 🔍 VALIDACIÓN DE CREDENCIALES
+      // 🔍 1. VALIDACIÓN PREVIA DE CREDENCIALES (Evita procesar fotos si el PIN está mal)
       final empleadoData = await SupabaseService.client
           .from('empleados')
           .select('id, nombre_completo, sucursal_id')
@@ -136,7 +108,31 @@ class _KioscoPageState extends State<KioscoPage> {
       final String nombreTrabajador = empleadoData['nombre_completo'] ?? "Empleado";
       final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
 
-      // 📝 INSERCIÓN DEL REGISTRO CON LA RUTA DE LA FOTO VINCULADA
+      // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Solo si el empleado fue validado correctamente)
+      if (_cameraController != null && _cameraController!.value.isInitialized) {
+        try {
+          final XFile fotoCapturada = await _cameraController!.takePicture();
+          
+          // Extracción nativa de bytes compatible con Flutter Web
+          final Uint8List bytesFoto = await fotoCapturada.readAsBytes();
+          
+          // Estructuración inteligente del nombre del archivo en el bucket
+          final String nombreArchivo = "${empleadoUuid}_${ahora.millisecondsSinceEpoch}.jpg";
+          final String rutaAlmacenamiento = "asistencias/$nombreArchivo";
+
+          // Subida estándar de bytes directos a Supabase Storage con las nuevas políticas SQL
+          await SupabaseService.storage
+              .from('asistencias_selfies')
+              .upload(rutaAlmacenamiento, bytesFoto);
+
+          rutaEvidenciaFinal = rutaAlmacenamiento;
+        } catch (eCamera) {
+          debugPrint("Advertencia en captura/subida de selfie: $eCamera");
+          rutaEvidenciaFinal = 'FALLO_FOTO';
+        }
+      }
+
+      // 📝 3. INSERCIÓN DEL REGISTRO FINAL CON LA RUTA DE EVIDENCIA REAL
       await SupabaseService.client.from('registros_asistencia').insert({
         'empleado_id': empleadoUuid,
         'sucursal_id': sucursalUuid,
@@ -144,7 +140,7 @@ class _KioscoPageState extends State<KioscoPage> {
         'fecha_hora_servidor': ahora.toIso8601String(),
         'dispositivo_info': 'Kiosco Web (Tablet/Móvil Responsivo)',
         'estatus_asistencia': 'TURNO_NO_PROGRAMADO',
-        'selfie_url': rutaEvidenciaFinal, // 👈 AQUÍ SE INYECTA LA RUTA REAL
+        'selfie_url': rutaEvidenciaFinal,
       });
 
       if (!mounted) return;
@@ -167,6 +163,7 @@ class _KioscoPageState extends State<KioscoPage> {
       }
     }
   }
+
 
   void _agregarDigito(String digito) {
     if (_pinActual.length >= 4) return;
