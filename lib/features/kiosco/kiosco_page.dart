@@ -126,10 +126,23 @@ class _KioscoPageState extends State<KioscoPage> {
               .upload(rutaAlmacenamiento, bytesFoto);
 
           rutaEvidenciaFinal = rutaAlmacenamiento;
-        } catch (eCamera) {
+               } catch (eCamera) {
           debugPrint("Advertencia en captura/subida de selfie: $eCamera");
+          
+          // ✅ HACER VISIBLE EL ERROR: Mostrar en la pantalla del móvil qué está fallando exactamente
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('❌ Error en cámara/storage: $eCamera'),
+                backgroundColor: Colors.red.shade900,
+                duration: const Duration(seconds: 8), // Tiempo suficiente para leerlo en el celular
+              ),
+            );
+          }
+          
           rutaEvidenciaFinal = 'FALLO_FOTO';
         }
+
       }
 
       // 📝 3. INSERCIÓN DEL REGISTRO FINAL CON LA RUTA DE EVIDENCIA REAL
