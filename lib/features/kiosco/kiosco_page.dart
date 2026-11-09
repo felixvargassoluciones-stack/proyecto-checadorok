@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../../core/supabase_service.dart';
 import 'dart:typed_data'; // 👈 AGREGAR ESTA LÍNEA
+import 'package:http/http.dart' as http;
+
 
 
 
@@ -109,12 +111,15 @@ class _KioscoPageState extends State<KioscoPage> {
       final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
 
       // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Solo si el empleado fue validado correctamente)
+            // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Solo si el empleado fue validado correctamente)
       if (_cameraController != null && _cameraController!.value.isInitialized) {
         try {
           final XFile fotoCapturada = await _cameraController!.takePicture();
           
-          // Extracción nativa de bytes compatible con Flutter Web
-          final Uint8List bytesFoto = await fotoCapturada.readAsBytes();
+          // ✅ SOLUCIÓN ANTI-OFUSCACIÓN: Leer los bytes mediante una petición HTTP local al Blob del navegador
+          // Esto evita el método obsoleto/ofuscado 'readAsBytes()' del paquete de la cámara en Web.
+          final responseBytes = await http.get(Uri.parse(fotoCapturada.path));
+          final Uint8List bytesFoto = responseBytes.bodyBytes;
           
           // Estructuración inteligente del nombre del archivo en el bucket
           final String nombreArchivo = "${empleadoUuid}_${ahora.millisecondsSinceEpoch}.jpg";
@@ -126,24 +131,23 @@ class _KioscoPageState extends State<KioscoPage> {
               .upload(rutaAlmacenamiento, bytesFoto);
 
           rutaEvidenciaFinal = rutaAlmacenamiento;
-               } catch (eCamera) {
+        } catch (eCamera) {
           debugPrint("Advertencia en captura/subida de selfie: $eCamera");
           
-          // ✅ HACER VISIBLE EL ERROR: Mostrar en la pantalla del móvil qué está fallando exactamente
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('❌ Error en cámara/storage: $eCamera'),
                 backgroundColor: Colors.red.shade900,
-                duration: const Duration(seconds: 8), // Tiempo suficiente para leerlo en el celular
+                duration: const Duration(seconds: 8),
               ),
             );
           }
           
           rutaEvidenciaFinal = 'FALLO_FOTO';
         }
-
       }
+
 
       // 📝 3. INSERCIÓN DEL REGISTRO FINAL CON LA RUTA DE EVIDENCIA REAL
       await SupabaseService.client.from('registros_asistencia').insert({
