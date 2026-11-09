@@ -890,32 +890,55 @@ class _AdminPageState extends State<AdminPage> {
                       // 🌟 INTERACTIVIDAD: Clic en la foto para abrir vista previa ampliada
                       leading: GestureDetector(
                         onTap: urlFinalFoto == null ? null : () {
-                          showDialog(
+                                                    showDialog(
                             context: context,
                             builder: (context) => Dialog(
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               clipBehavior: Clip.antiAlias,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  AppBar(
-                                    backgroundColor: Colors.teal,
-                                    title: Text('VERIFICACIÓN: $nombreTrabajador', style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold)),
-                                    automaticallyImplyLeading: false,
-                                    actions: [IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context))],
-                                  ),
-                                  Container(
-                                    constraints: const BoxConstraints(maxWidth: 400, maxHeight: 400),
-                                    child: Image.network(
-                                      urlFinalFoto!,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (context, error, stackTrace) => const Center(child: Padding(padding: EdgeInsets.all(20.0), child: Text('No se pudo cargar la imagen.'))),
+                              elevation: 8, // Sombreado elegante para profundidad visual
+                              child: Container(
+                                // Restringimos el ancho máximo para que encaje simétricamente con fotos de tablets/móviles
+                                constraints: const BoxConstraints(maxWidth: 420), 
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    AppBar(
+                                      backgroundColor: const Color(0xFF0F172A), // Tono Slate oscuro corporativo a juego con el sidebar
+                                      title: Text(
+                                        'VERIFICACIÓN: $nombreTrabajador', 
+                                        style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 0.5)
+                                      ),
+                                      centerTitle: true, // Centrar título para mayor equilibrio estético
+                                      automaticallyImplyLeading: false,
+                                      elevation: 0,
+                                      actions: [
+                                        IconButton(
+                                          icon: const Icon(Icons.close, color: Colors.white70), 
+                                          onPressed: () => Navigator.pop(context)
+                                        )
+                                      ],
                                     ),
-                                  ),
-                                ],
+                                    // Contenedor que expande la foto al 100% del ancho eliminando los bordes blancos vacíos
+                                    Container(
+                                      width: double.infinity,
+                                      color: const Color(0xFFF1F5F9), // Fondo claro neutral de respaldo
+                                      child: Image.network(
+                                        urlFinalFoto!,
+                                        fit: BoxFit.cover, // Expande la imagen de forma homogénea llenando el recuadro
+                                        errorBuilder: (context, error, stackTrace) => const Center(
+                                          child: Padding(
+                                            padding: EdgeInsets.all(32.0), 
+                                            child: Text('⚠️ No se pudo renderizar la captura.', style: TextStyle(color: Colors.grey))
+                                          )
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
+
                         },
                         child: Container(
                           width: 40,
