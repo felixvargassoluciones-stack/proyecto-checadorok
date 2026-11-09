@@ -826,10 +826,12 @@ class _AdminPageState extends State<AdminPage> {
                   // basándonos en la hora del servidor para ir a buscarlo directamente al bucket
                                    // 📸 RESCATE SEGURO CONTRA TEXTOS PLANOS O ENLACES CORRUPTOS
                                    // 📸 OBTENCIÓN DE URL PÚBLICA DE LA SELFIE DESDE SUPABASE STORAGE
+                                   // ✅ SOLUCIÓN AL ERROR 400: Asignar directamente la URL pública completa almacenada en la base de datos
                   String? urlFinalFoto;
-                  if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty && selfieUrlCampo.contains('/')) {
-                    urlFinalFoto = SupabaseService.client.storage.from('asistencias_selfies').getPublicUrl(selfieUrlCampo);
+                  if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty && selfieUrlCampo.startsWith('http')) {
+                    urlFinalFoto = selfieUrlCampo;
                   }
+
 
 
 
