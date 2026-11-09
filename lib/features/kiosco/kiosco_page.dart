@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../../core/supabase_service.dart';
-import 'dart:typed_data'; // 👈 AGREGAR ESTA LÍNEA
 
 
 
@@ -79,7 +78,7 @@ class _KioscoPageState extends State<KioscoPage> {
       if (mounted) setState(() {});
     }
   }
-     Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
+      Future<void> _procesarMarcajeAsistencia(String tipoEvento) async {
     if (_pinActual.isEmpty || _estaProcesando) return;
 
     setState(() => _estaProcesando = true);
@@ -88,7 +87,7 @@ class _KioscoPageState extends State<KioscoPage> {
       final ahora = DateTime.now();
       String rutaEvidenciaFinal = 'EMPTY';
 
-      // 🔍 1. VALIDACIÓN PREVIA DE CREDENCIALES (Evita procesar fotos si el PIN es incorrecto)
+      // 🔍 1. VALIDACIÓN PREVIA DE CREDENCIALES (Evita procesar fotos si el PIN está mal)
       final empleadoData = await SupabaseService.client
           .from('empleados')
           .select('id, nombre_completo, sucursal_id')
@@ -111,24 +110,24 @@ class _KioscoPageState extends State<KioscoPage> {
       final String nombreTrabajador = empleadoData['nombre_completo'] ?? "Empleado";
       final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
 
-      // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Método directo compatible con producción web)
+      // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Solo si el empleado fue validado correctamente)
+            // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Solo si el empleado fue validado correctamente)
+            // 📷 2. CAPTURA Y SUBIDA DE SELFIE (Uso del XFile directo para compatibilidad Web total)
       if (_cameraController != null && _cameraController!.value.isInitialized) {
         try {
+          // Captura limpia del archivo temporal en el navegador
           final XFile fotoCapturada = await _cameraController!.takePicture();
           
-          // Extracción directa del archivo original (Línea nativa probada)
-          final Uint8List bytesFoto = await fotoCapturada.readAsBytes();
-          
-          // Estructuración única del nombre del archivo
+          // Estructuración controlada del nombre del archivo en el bucket
           final String nombreArchivo = "${empleadoUuid}_${ahora.millisecondsSinceEpoch}.jpg";
           final String rutaAlmacenamiento = "asistencias/$nombreArchivo";
 
-          // Subida asíncrona controlada a Supabase Storage
-          await SupabaseService.storage
+          // Subida nativa del XFile directo al Storage eludiendo la ofuscación de bytes
+          await SupabaseService.client.storage
               .from('asistencias_selfies')
-              .upload(rutaAlmacenamiento, bytesFoto);
+              .upload(rutaAlmacenamiento, fotoCapturada);
 
-          // Sincronización garantizada: Solo cambia el estado si la subida fue exitosa
+          // Asignación garantizada tras el éxito en la transferencia
           rutaEvidenciaFinal = rutaAlmacenamiento;
         } catch (eCamera) {
           debugPrint("Advertencia en captura/subida de selfie: $eCamera");
@@ -136,7 +135,9 @@ class _KioscoPageState extends State<KioscoPage> {
         }
       }
 
-      // 📝 3. INSERCIÓN DEL REGISTRO FINAL CON LA RUTA DE EVIDENCIA CONFIRMADA
+
+
+      // 📝 3. INSERCIÓN DEL REGISTRO FINAL CON LA RUTA DE EVIDENCIA REAL
       await SupabaseService.client.from('registros_asistencia').insert({
         'empleado_id': empleadoUuid,
         'sucursal_id': sucursalUuid,
@@ -144,7 +145,7 @@ class _KioscoPageState extends State<KioscoPage> {
         'fecha_hora_servidor': ahora.toIso8601String(),
         'dispositivo_info': 'Kiosco Web (Tablet/Móvil Responsivo)',
         'estatus_asistencia': 'TURNO_NO_PROGRAMADO',
-        'selfie_url': rutaEvidenciaFinal, // Se inyecta la ruta real ya confirmada
+        'selfie_url': rutaEvidenciaFinal,
       });
 
       if (!mounted) return;
@@ -167,7 +168,6 @@ class _KioscoPageState extends State<KioscoPage> {
       }
     }
   }
-
 
 
   void _agregarDigito(String digito) {
