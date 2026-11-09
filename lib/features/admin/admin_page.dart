@@ -825,13 +825,10 @@ class _AdminPageState extends State<AdminPage> {
                   // Si el campo de la tabla viene vacío, calculamos el nombre del archivo 
                   // basándonos en la hora del servidor para ir a buscarlo directamente al bucket
                                    // 📸 RESCATE SEGURO CONTRA TEXTOS PLANOS O ENLACES CORRUPTOS
+                                   // 📸 OBTENCIÓN DE URL PÚBLICA DE LA SELFIE DESDE SUPABASE STORAGE
                   String? urlFinalFoto;
-                  if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty && selfieUrlCampo.startsWith('asistencias/')) {
-                    // Solo si la base de datos contiene una ruta de archivo real en el Storage
-                    urlFinalFoto = SupabaseService.storage.from('asistencias_selfies').getPublicUrl(selfieUrlCampo);
-                  } else {
-                    // Bloquea de inmediato la petición web si el campo es inválido o dice EMPTY
-                    urlFinalFoto = null;
+                  if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty && selfieUrlCampo.contains('/')) {
+                    urlFinalFoto = SupabaseService.client.storage.from('asistencias_selfies').getPublicUrl(selfieUrlCampo);
                   }
 
 

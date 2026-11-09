@@ -4,6 +4,8 @@ import 'package:camera/camera.dart';
 import '../../core/supabase_service.dart';
 import 'dart:typed_data'; // 👈 AGREGAR ESTA LÍNEA
 
+
+
 class KioscoPage extends StatefulWidget {
   const KioscoPage({super.key});
 
@@ -85,28 +87,30 @@ class _KioscoPageState extends State<KioscoPage> {
 
       // 📷 CAPTURA AUTOMATIZADA DE EVIDENCIA EN MEMORIA
             // 📷 CAPTURA AUTOMATIZADA DE EVIDENCIA EN MEMORIA
-      if (_cameraController != null && _cameraController!.value.isInitialized) {
+            // 📷 CAPTURA AUTOMATIZADA DE EVIDENCIA COMPATIBLE CON FLUTTER WEB
+            if (_cameraController != null && _cameraController!.value.isInitialized) {
         try {
           final XFile fotoCapturada = await _cameraController!.takePicture();
+          
+          // 🌐 Extracción de bytes nativa y directa para la Web
           final Uint8List bytesFoto = await fotoCapturada.readAsBytes();
           
           // Nombre único usando la marca de tiempo para evitar colisiones
           final String nombreArchivo = "${ahora.millisecondsSinceEpoch}.jpg";
           final String rutaAlmacenamiento = "asistencias/$nombreArchivo";
 
-          // Subida estándar de bytes compatible con tu versión de Supabase
-                   // Subida estándar con inferencia automática de tipo de archivo
+          // Subida estándar de bytes a Supabase Storage
           await SupabaseService.storage
               .from('asistencias_selfies')
               .upload(rutaAlmacenamiento, bytesFoto);
 
-
           rutaEvidenciaFinal = rutaAlmacenamiento;
         } catch (eCamera) {
           debugPrint("Advertencia en captura/subida de selfie: $eCamera");
-          // Si falla la cámara, el flujo continúa guardando 'EMPTY' para no bloquear al taller
         }
       }
+
+
 
 
       // 🔍 VALIDACIÓN DE CREDENCIALES
