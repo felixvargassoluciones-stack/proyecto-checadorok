@@ -821,170 +821,178 @@ class _AdminPageState extends State<AdminPage> {
   }
 
 
-    Widget _buildSeccionFeedMonitoreo() {
+      Widget _buildSeccionFeedMonitoreo() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('MONITOREO DE ASISTENCIAS EN TIEMPO REAL', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-        const SizedBox(height: 8),
+        const Text(
+          'MONITOREO DE ASISTENCIAS EN TIEMPO REAL - VISTA CORPORATIVA', 
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 0.5)
+        ),
+        const SizedBox(height: 12),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseService.client.from('registros_asistencia').stream(primaryKey: ['id']).order('fecha_hora_servidor', ascending: false).map((maps) {
-              final listaFiltrada = maps.where((registro) {
-                final fServidor = DateTime.parse(registro['fecha_hora_servidor']);
-                return fServidor.isAfter(_rangoFechas.start.subtract(const Duration(days: 1))) && fServidor.isBefore(_rangoFechas.end.add(const Duration(days: 1)));
-              }).toList();
-              return List<Map<String, dynamic>>.from(listaFiltrada);
-            }),
+            stream: SupabaseService.client
+                .from('registros_asistencia')
+                .stream(primaryKey: ['id'])
+                .order('fecha_hora_servidor', ascending: false)
+                .map((maps) {
+                  final listaFiltrada = maps.where((registro) {
+                    final fServidor = DateTime.parse(registro['fecha_hora_servidor']);
+                    return fServidor.isAfter(_rangoFechas.start.subtract(const Duration(days: 1))) && 
+                           fServidor.isBefore(_rangoFechas.end.add(const Duration(days: 1)));
+                  }).toList();
+                  return List<Map<String, dynamic>>.from(listaFiltrada);
+                }),
             builder: (context, snapshot) {
               if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(fontSize: 12)));
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.teal));
-              final registros = snapshot.data ?? [];
-              if (registros.isEmpty) return const Center(child: Text('Sin checadas registradas el día de hoy.', style: TextStyle(fontSize: 13)));
               
-              return ListView.builder(
-                itemCount: registros.length,
-                itemBuilder: (context, index) {
-                  final r = registros[index];
-                  final f = DateTime.parse(r['fecha_hora_servidor']);
-                  final String empleadoId = r['empleado_id']?.toString() ?? '';
-                  final String selfieUrlCampo = r['selfie_url']?.toString() ?? 'EMPTY';
+              final registros = snapshot.data ?? [];
+              if (registros.isEmpty) return const Center(child: Text('Sin checadas registradas en el rango seleccionado.', style: TextStyle(fontSize: 13)));
+              
+              // 📊 ENVOLTORIO DE DESPLAZAMIENTO BIDIRECCIONAL (Efecto Hoja de Cálculo Excel)
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.white, 
+                  borderRadius: BorderRadius.circular(12), 
+                  border: Border.all(color: const Color(0xffe2e8f0))
+                ),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      headingRowColor: WidgetStateProperty.all(Colors.blueGrey.shade50),
 
-                  // 🔍 CRUCE EN MEMORIA: Buscar los datos del empleado en la lista global precargada
-                  Map<String, dynamic>? empleadoEncontrado;
-                  try {
-                    empleadoEncontrado = _empleadosRegistrados.firstWhere(
-                      (emp) => emp['id'].toString() == empleadoId,
-                    );
-                  } catch (_) {
-                    empleadoEncontrado = null; // No se encontró coincidencia local
-                  }
+                      dataRowMinHeight: 46,
+                      dataRowMaxHeight: 52,
+                      horizontalMargin: 16,
+                      columnSpacing: 24,
+                      columns: const [
+                        DataColumn(label: Text('NÓMINA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('FOTO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('TRABAJADOR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('CARGO / PUESTO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('FECHA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('HORA REAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('TURNO HORARIO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('MIN RETARDO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('INCIDENCIA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('ESTATUS LEY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                      ],
+                      rows: registros.map((r) {
+                        final f = DateTime.parse(r['fecha_hora_servidor']);
+                        final String empleadoId = r['empleado_id']?.toString() ?? '';
+                        final String selfieUrlCampo = r['selfie_url']?.toString() ?? 'EMPTY';
 
-                  // Extracción de datos con respaldos seguros por si no se encuentra el ID
-                  final String nombreTrabajador = empleadoEncontrado != null ? (empleadoEncontrado['nombre_completo'] ?? 'Desconocido') : 'Desconocido';
-                  final String nominaTrabajador = empleadoEncontrado != null ? (empleadoEncontrado['numero_empleado']?.toString() ?? '----') : '----';
-                  
-                  final puestoData = empleadoEncontrado != null ? empleadoEncontrado['puestos'] as Map<String, dynamic>? : null;
-                  final String cargoTrabajador = puestoData != null ? (puestoData['nombre'] ?? 'GENERAL') : 'GENERAL';
+                        // Cruce en memoria para traer datos del empleado
+                        Map<String, dynamic>? empEncontrado;
+                        try {
+                          empEncontrado = _empleadosRegistrados.firstWhere((e) => e['id'].toString() == empleadoId);
+                        } catch (_) {
+                          empEncontrado = null;
+                        }
 
-                  // 📸 OBTENCIÓN DE URL PÚBLICA DE LA SELFIE DESDE SUPABASE STORAGE
-                                    // 📸 RESCATE DIRECTO DESDE STORAGE (Enfoque sugerido)
-                  // Si el campo de la tabla viene vacío, calculamos el nombre del archivo 
-                  // basándonos en la hora del servidor para ir a buscarlo directamente al bucket
-                                   // 📸 RESCATE SEGURO CONTRA TEXTOS PLANOS O ENLACES CORRUPTOS
-                                   // 📸 OBTENCIÓN DE URL PÚBLICA DE LA SELFIE DESDE SUPABASE STORAGE
-                                   // ✅ SOLUCIÓN AL ERROR 400: Asignar directamente la URL pública completa almacenada en la base de datos
-                  String? urlFinalFoto;
-                  if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty && selfieUrlCampo.startsWith('http')) {
-                    urlFinalFoto = selfieUrlCampo;
-                  }
+                        final String nombreTrabajador = empEncontrado != null ? (empEncontrado['nombre_completo'] ?? 'Desconocido') : 'Desconocido';
+                        final String nominaTrabajador = empEncontrado != null ? (empEncontrado['numero_empleado']?.toString() ?? '----') : '----';
+                        
+                        final puestoData = empEncontrado != null ? empEncontrado['puestos'] as Map<String, dynamic>? : null;
+                        final String cargoTrabajador = puestoData != null ? (puestoData['nombre'] ?? 'GENERAL') : 'GENERAL';
 
+                        String? urlFinalFoto;
+                        if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty && selfieUrlCampo.startsWith('http')) {
+                          urlFinalFoto = selfieUrlCampo;
+                        }
 
+                        final String fechaLegible = "${f.day.toString().padLeft(2, '0')}/${f.month.toString().padLeft(2, '0')}/${f.year}";
+                        final String horaLegible = "${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}:${f.second.toString().padLeft(2, '0')}";
 
-
-                                   return Card(
-                    margin: const EdgeInsets.only(bottom: 8.0),
-                    elevation: 0, 
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: Color(0xffe2e8f0))),
-                    child: ListTile(
-                      // 🌟 INTERACTIVIDAD: Clic en la foto para abrir vista previa ampliada
-                      leading: GestureDetector(
-                        onTap: urlFinalFoto == null ? null : () {
-                                                    showDialog(
-                            context: context,
-                            builder: (context) => Dialog(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              clipBehavior: Clip.antiAlias,
-                              elevation: 8, // Sombreado elegante para profundidad visual
+                        return DataRow(cells: [
+                          DataCell(Text(nominaTrabajador, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                          DataCell(
+                            GestureDetector(
+                              onTap: urlFinalFoto == null ? null : () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => Dialog(
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    clipBehavior: Clip.antiAlias,
+                                    elevation: 8,
+                                    child: Container(
+                                      constraints: const BoxConstraints(maxWidth: 420),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          AppBar(
+                                            backgroundColor: const Color(0xFF0F172A),
+                                            title: Text('VERIFICACIÓN: $nombreTrabajador', style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold)),
+                                            centerTitle: true,
+                                            automaticallyImplyLeading: false,
+                                            elevation: 0,
+                                            actions: [IconButton(icon: const Icon(Icons.close, color: Colors.white70), onPressed: () => Navigator.pop(context))],
+                                          ),
+                                          Container(
+                                            width: double.infinity,
+                                            color: const Color(0xFFF1F5F9),
+                                            child: Image.network(
+                                              urlFinalFoto!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) => const Center(child: Padding(padding: EdgeInsets.all(32.0), child: Text('⚠️ Error al renderizar.', style: TextStyle(color: Colors.grey)))),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
                               child: Container(
-                                // Restringimos el ancho máximo para que encaje simétricamente con fotos de tablets/móviles
-                                constraints: const BoxConstraints(maxWidth: 420), 
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    AppBar(
-                                      backgroundColor: const Color(0xFF0F172A), // Tono Slate oscuro corporativo a juego con el sidebar
-                                      title: Text(
-                                        'VERIFICACIÓN: $nombreTrabajador', 
-                                        style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 0.5)
-                                      ),
-                                      centerTitle: true, // Centrar título para mayor equilibrio estético
-                                      automaticallyImplyLeading: false,
-                                      elevation: 0,
-                                      actions: [
-                                        IconButton(
-                                          icon: const Icon(Icons.close, color: Colors.white70), 
-                                          onPressed: () => Navigator.pop(context)
-                                        )
-                                      ],
-                                    ),
-                                    // Contenedor que expande la foto al 100% del ancho eliminando los bordes blancos vacíos
-                                    Container(
-                                      width: double.infinity,
-                                      color: const Color(0xFFF1F5F9), // Fondo claro neutral de respaldo
-                                      child: Image.network(
-                                        urlFinalFoto!,
-                                        fit: BoxFit.cover, // Expande la imagen de forma homogénea llenando el recuadro
-                                        errorBuilder: (context, error, stackTrace) => const Center(
-                                          child: Padding(
-                                            padding: EdgeInsets.all(32.0), 
-                                            child: Text('⚠️ No se pudo renderizar la captura.', style: TextStyle(color: Colors.grey))
-                                          )
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                width: 34,
+                                height: 34,
+                                decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.teal),
+                                child: ClipOval(
+                                  child: urlFinalFoto != null
+                                      ? Image.network(urlFinalFoto, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Colors.white, size: 16))
+                                      : const Icon(Icons.person, color: Colors.white, size: 16),
                                 ),
                               ),
                             ),
-                          );
+                          ),
+                          DataCell(Text(nombreTrabajador, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+                          DataCell(Text(cargoTrabajador, style: const TextStyle(fontSize: 13, color: Colors.black54))),
+                          DataCell(Text(fechaLegible, style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
+                                                   // Se eliminó la palabra 'const' antes de TextStyle para permitir el uso de shade700
+                          DataCell(Text(horaLegible, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.teal.shade700))),
 
-                        },
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.teal),
-                          child: ClipOval(
-                            child: urlFinalFoto != null
-                                ? Image.network(
-                                    urlFinalFoto,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Colors.white, size: 18),
-                                  )
-                                : const Icon(Icons.person, color: Colors.white, size: 18),
-                          ),
-                        ),
-                      ),
-                      title: Text(nombreTrabajador, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      subtitle: Text(
-                        'Nómina: $nominaTrabajador  •  Cargo: $cargoTrabajador  •  Hora: ${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}',
-                        style: const TextStyle(fontSize: 12, color: Colors.black54),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Chip(
-                            label: Text(
-                              r['tipo_evento'] ?? 'ENTRADA', 
-                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                          const DataCell(Text('08:00 - 17:00', style: TextStyle(fontSize: 13, color: Colors.grey, fontStyle: FontStyle.italic))),
+                          const DataCell(Text('0 min', style: TextStyle(fontSize: 13, color: Colors.grey))),
+                          DataCell(
+                            Chip(
+                              label: Text(r['tipo_evento'] ?? 'ENTRADA', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                              padding: EdgeInsets.zero,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          // 🌟 NUEVO BOTÓN: Eliminar marcaje de asistencia individual
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                            onPressed: () => _eliminarRegistroAsistencia(
-                              r['id'].toString(), 
-                              nombreTrabajador, 
-                              r['tipo_evento'] ?? 'ASISTENCIA'
+                          DataCell(Text(r['estatus_asistencia'] ?? 'TURNO_NO_PROGRAMADO', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber))),
+                          DataCell(
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _eliminarRegistroAsistencia(
+                                r['id'].toString(), 
+                                nombreTrabajador, 
+                                r['tipo_evento'] ?? 'ASISTENCIA'
+                              ),
                             ),
                           ),
-                        ],
-                      ),
+                        ]);
+                      }).toList(),
                     ),
-                  );
-
-                },
+                  ),
+                ),
               );
             },
           ),
@@ -992,6 +1000,8 @@ class _AdminPageState extends State<AdminPage> {
       ],
     );
   }
+
+  
 
 
   void _descargarExcel() {
