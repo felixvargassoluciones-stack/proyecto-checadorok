@@ -148,11 +148,11 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  Future<void> _cargarListaEmpleadosExcel() async {
+   Future<void> _cargarListaEmpleadosExcel() async {
     try {
       final datos = await SupabaseService.client
           .from('empleados')
-          .select('id, numero_empleado, nombre_completo, pin_acceso, puesto_id, sucursal_id, correo_electronico, fecha_ingreso, sucursales(nombre), puestos(nombre)')
+          .select('id, numero_empleado, nombre_completo, pin_acceso, puesto_id, sucursal_id, correo_electronico, fecha_ingreso, sucursales(nombre), puestos(nombre), turnos(nombre_turno, hora_entrada, hora_salida, tolerancia_minutos)')
           .order('numero_empleado');
       if (mounted) {
         setState(() {
@@ -161,10 +161,11 @@ class _AdminPageState extends State<AdminPage> {
         });
       }
     } catch (e) {
-      debugPrint("Error al cargar empleados para Excel: $e");
+      debugPrint("Error al cargar empleados para Excel relacional: $e");
       if (mounted) setState(() => _cargandoDatos = false);
     }
   }
+
 
   @override
   void dispose() {
@@ -997,12 +998,13 @@ class _AdminPageState extends State<AdminPage> {
                       ],
 
 
-                      rows: registros.map((r) {
+                                           rows: registros.map((r) {
                         final f = DateTime.parse(r['fecha_hora_servidor']);
                         final String empleadoId = r['empleado_id']?.toString() ?? '';
                         final String selfieUrlCampo = r['selfie_url']?.toString() ?? 'EMPTY';
+                        final String evento = r['tipo_evento'] ?? 'ENTRADA';
 
-                        // Cruce en memoria para traer datos del empleado
+                        // Cruce relacional en memoria
                         Map<String, dynamic>? empEncontrado;
                         try {
                           empEncontrado = _empleadosRegistrados.firstWhere((e) => e['id'].toString() == empleadoId);
@@ -1016,6 +1018,37 @@ class _AdminPageState extends State<AdminPage> {
                         final puestoData = empEncontrado != null ? empEncontrado['puestos'] as Map<String, dynamic>? : null;
                         final String cargoTrabajador = puestoData != null ? (puestoData['nombre'] ?? 'GENERAL') : 'GENERAL';
 
+                        // 🧮 EXTRACCIÓN DE PARÁMETROS DE TURNO REAL DESDE SUPABASE
+                        final turnoData = empEncontrado != null ? empEncontrado['turnos'] as Map<String, dynamic>? : null;
+                        
+                        final String tEntrada = turnoData != null ? (turnoData['hora_entrada'] ?? '08:00:00') : '08:00:00';
+                        final String tSalida = turnoData != null ? (turnoData['hora_salida'] ?? '17:00:00') : '17:00:00';
+                        final int tTolerancia = turnoData != null ? (int.tryParse(turnoData['tolerancia_minutos']?.toString() ?? '0') ?? 0) : 0;
+
+                        // 🧮 CÁLCULO DE RETARDO DE LEY CORPORATIVO EN TIEMPO REAL
+                        int minutosRetardo = 0;
+                        String estatusLeyCalculado = 'ASISTENCIA';
+
+                        if (evento == 'ENTRADA') {
+                          try {
+                            final partesTurno = tEntrada.split(':');
+                            final int horaTurno = int.parse(partesTurno[0]);
+                            final int minTurno = int.parse(partesTurno[1]);
+
+                            final limiteEntrada = DateTime(f.year, f.month, f.day, horaTurno, minTurno);
+                            final limiteConTolerancia = limiteEntrada.add(Duration(minutes: tTolerancia));
+
+                            if (f.isAfter(limiteConTolerancia)) {
+                              minutosRetardo = f.difference(limiteEntrada).inMinutes;
+                              estatusLeyCalculado = 'RETARDO';
+                            }
+                          } catch (_) {
+                            estatusLeyCalculado = 'TURNO_ERROR';
+                          }
+                        } else {
+                          estatusLeyCalculado = 'COMPLETO';
+                        }
+
                         String? urlFinalFoto;
                         if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty && selfieUrlCampo.startsWith('http')) {
                           urlFinalFoto = selfieUrlCampo;
@@ -1024,7 +1057,7 @@ class _AdminPageState extends State<AdminPage> {
                         final String fechaLegible = "${f.day.toString().padLeft(2, '0')}/${f.month.toString().padLeft(2, '0')}/${f.year}";
                         final String horaLegible = "${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}:${f.second.toString().padLeft(2, '0')}";
 
-                        return DataRow(cells: [
+                         return DataRow(cells: [
                           DataCell(Text(nominaTrabajador, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
                           DataCell(
                             GestureDetector(
@@ -1078,19 +1111,26 @@ class _AdminPageState extends State<AdminPage> {
                           DataCell(Text(nombreTrabajador, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
                           DataCell(Text(cargoTrabajador, style: const TextStyle(fontSize: 13, color: Colors.black54))),
                           DataCell(Text(fechaLegible, style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
-                                                   // Se eliminó la palabra 'const' antes de TextStyle para permitir el uso de shade700
                           DataCell(Text(horaLegible, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.teal.shade700))),
-
-                          const DataCell(Text('08:00 - 17:00', style: TextStyle(fontSize: 13, color: Colors.grey, fontStyle: FontStyle.italic))),
-                          const DataCell(Text('0 min', style: TextStyle(fontSize: 13, color: Colors.grey))),
+                          DataCell(Text('${tEntrada.substring(0,5)} - ${tSalida.substring(0,5)}', style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w500))),
+                          DataCell(Text(minutosRetardo > 0 ? '$minutosRetardo min' : '0 min', style: TextStyle(fontSize: 13, fontWeight: minutosRetardo > 0 ? FontWeight.bold : FontWeight.normal, color: minutosRetardo > 0 ? Colors.red : Colors.black54))),
                           DataCell(
                             Chip(
-                              label: Text(r['tipo_evento'] ?? 'ENTRADA', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                              label: Text(evento, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                               padding: EdgeInsets.zero,
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                           ),
-                          DataCell(Text(r['estatus_asistencia'] ?? 'TURNO_NO_PROGRAMADO', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber))),
+                          DataCell(
+                            Text(
+                              estatusLeyCalculado, 
+                              style: TextStyle(
+                                fontSize: 12, 
+                                fontWeight: FontWeight.bold, 
+                                color: estatusLeyCalculado == 'RETARDO' ? Colors.red.shade700 : (estatusLeyCalculado == 'ASISTENCIA' ? Colors.green.shade700 : Colors.blue.shade700)
+                              )
+                            )
+                          ),
                           DataCell(
                             IconButton(
                               icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
@@ -1099,12 +1139,13 @@ class _AdminPageState extends State<AdminPage> {
                               onPressed: () => _eliminarRegistroAsistencia(
                                 r['id'].toString(), 
                                 nombreTrabajador, 
-                                r['tipo_evento'] ?? 'ASISTENCIA'
+                                evento
                               ),
                             ),
                           ),
                         ]);
                       }).toList(),
+
                     ),
                   ),
                 ),
@@ -1215,9 +1256,10 @@ class _AdminPageState extends State<AdminPage> {
                   pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('ESTATUS LEY', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
                 ],
               ),
-              ...registrosFiltrados.map((r) {
+                           ...registrosFiltrados.map((r) {
                 final f = DateTime.parse(r['fecha_hora_servidor']);
                 final String empleadoId = r['empleado_id']?.toString() ?? '';
+                final String evento = r['tipo_evento'] ?? 'ENTRADA';
 
                 Map<String, dynamic>? empEncontrado;
                 try {
@@ -1232,21 +1274,44 @@ class _AdminPageState extends State<AdminPage> {
                 final puestoData = empEncontrado != null ? empEncontrado['puestos'] as Map<String, dynamic>? : null;
                 final String cargoTrabajador = puestoData != null ? (puestoData['nombre'] ?? 'GENERAL') : 'GENERAL';
 
+                // Turnos y tolerancia en PDF
+                final turnoData = empEncontrado != null ? empEncontrado['turnos'] as Map<String, dynamic>? : null;
+                final String tEntrada = turnoData != null ? (turnoData['hora_entrada'] ?? '08:00:00') : '08:00:00';
+                final int tTolerancia = turnoData != null ? (int.tryParse(turnoData['tolerancia_minutos']?.toString() ?? '0') ?? 0) : 0;
+
+                int minutosRetardo = 0;
+                String estatusLeyCalculado = 'ASISTENCIA';
+
+                if (evento == 'ENTRADA') {
+                  try {
+                    final partesTurno = tEntrada.split(':');
+                    final limiteEntrada = DateTime(f.year, f.month, f.day, int.parse(partesTurno[0]), int.parse(partesTurno[1]));
+                    final limiteConTolerancia = limiteEntrada.add(Duration(minutes: tTolerancia));
+
+                    if (f.isAfter(limiteConTolerancia)) {
+                      minutosRetardo = f.difference(limiteEntrada).inMinutes;
+                      estatusLeyCalculado = 'RETARDO';
+                    }
+                  } catch (_) {}
+                } else {
+                  estatusLeyCalculado = 'COMPLETO';
+                }
+
                 final String fechaLegible = "${f.day.toString().padLeft(2, '0')}/${f.month.toString().padLeft(2, '0')}/${f.year}";
                 final String horaLegible = "${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}:${f.second.toString().padLeft(2, '0')}";
-
                 return pw.TableRow(
                   children: [
                     pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(nominaTrabajador, style: const pw.TextStyle(fontSize: 8))),
                     pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(nombreTrabajador, style: const pw.TextStyle(fontSize: 8))),
                     pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(cargoTrabajador, style: const pw.TextStyle(fontSize: 8))),
                     pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(fechaLegible, style: const pw.TextStyle(fontSize: 8))),
-                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(horaLegible, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
-                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(r['tipo_evento'] ?? 'ENTRADA', style: const pw.TextStyle(fontSize: 8))),
-                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(r['estatus_asistencia'] ?? 'TURNO_NO_PROGRAMADO', style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('$horaLegible (${minutosRetardo > 0 ? "$minutosRetardo min lat" : "ok"})', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold, color: minutosRetardo > 0 ? PdfColors.red : PdfColors.black))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(evento, style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(estatusLeyCalculado, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: estatusLeyCalculado == 'RETARDO' ? PdfColors.red : PdfColors.green))),
                   ],
                 );
               }),
+
             ],
           ),
         ],
