@@ -59,7 +59,7 @@ class AdminPage extends StatefulWidget {
 
 class _AdminPageState extends State<AdminPage> {
   final _formKey = GlobalKey<FormState>();
-  final DateTimeRange _rangoFechas = DateTimeRange(
+   DateTimeRange _rangoFechas = DateTimeRange(
     start: DateTime.now().subtract(const Duration(days: 7)),
     end: DateTime.now(),
   );
@@ -825,26 +825,25 @@ class _AdminPageState extends State<AdminPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 🔍 BARRA DE FILTRADO SUPERIOR COMPACTA TIPO EXCEL
+        // 🔍 BARRA DE FILTRADO SUPERIOR COMPACTA OPTIMIZADA PARA WEB
         Container(
-          padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 12), // 👈 Corrección: Usar .only
+          padding: const EdgeInsets.all(10),
+          margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Color(0xffe2e8f0)), // 👈 Corrección: Quitar const antes de Color
+            border: Border.all(color: const Color(0xffe2e8f0)),
           ),
-
           child: Row(
             children: [
               // Filtro por Nombre o Nómina
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: TextFormField(
                   controller: _buscarExcelController,
                   onChanged: (value) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: '🔍 Buscar por Nombre o Nómina...',
+                    hintText: '🔍 Buscar por Nombre o Nómina de empleado...',
                     hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
                     prefixIcon: const Icon(Icons.search, size: 16, color: Colors.grey),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
@@ -855,38 +854,64 @@ class _AdminPageState extends State<AdminPage> {
                 ),
               ),
               const SizedBox(width: 12),
-              // Filtro de Rango de Fechas (Aprovechando _rangoFechas del archivo)
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  backgroundColor: Colors.teal.shade50,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              // Selector de Fecha Inicial Seguro para Escritorio
+              Expanded(
+                flex: 2,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: Color(0xffcbd5e1)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  icon: const Icon(Icons.calendar_today, size: 14, color: Colors.blueGrey),
+                  label: Text(
+                    'Inicio: ${_rangoFechas.start.day}/${_rangoFechas.start.month}/${_rangoFechas.start.year}',
+                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                  ),
+                  onPressed: () async {
+                    final DateTime? fInicio = await showDatePicker(
+                      context: context,
+                      initialDate: _rangoFechas.start,
+                      firstDate: DateTime(2020),
+                      lastDate: _rangoFechas.end,
+                    );
+                    if (fInicio != null) {
+                      setState(() {
+                        _rangoFechas = DateTimeRange(start: fInicio, end: _rangoFechas.end);
+                      });
+                    }
+                  },
                 ),
-                icon: const Icon(Icons.date_range, size: 16, color: Colors.teal),
-                label: Text(
-                  'Rango: ${_rangoFechas.start.day}/${_rangoFechas.start.month} al ${_rangoFechas.end.day}/${_rangoFechas.end.month}',
-                  style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+              const SizedBox(width: 8),
+              // Selector de Fecha Final Seguro para Escritorio
+              Expanded(
+                flex: 2,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: Color(0xffcbd5e1)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  icon: const Icon(Icons.calendar_today, size: 14, color: Colors.blueGrey),
+                  label: Text(
+                    'Fin: ${_rangoFechas.end.day}/${_rangoFechas.end.month}/${_rangoFechas.end.year}',
+                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                  ),
+                  onPressed: () async {
+                    final DateTime? fFin = await showDatePicker(
+                      context: context,
+                      initialDate: _rangoFechas.end,
+                      firstDate: _rangoFechas.start,
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (fFin != null) {
+                      setState(() {
+                        _rangoFechas = DateTimeRange(start: _rangoFechas.start, end: fFin);
+                      });
+                    }
+                  },
                 ),
-                onPressed: () async {
-                  final DateTimeRange? nuevoRango = await showDateRangePicker(
-                    context: context,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                    initialDateRange: _rangoFechas,
-                    builder: (context, child) => Theme(
-                      data: Theme.of(context).copyWith(
-                        colorScheme: const ColorScheme.light(primary: Colors.teal, onPrimary: Colors.white),
-                      ),
-                      child: child!,
-                    ),
-                  );
-                  if (nuevoRango != null) {
-                    setState(() {
-                      // El cambio disparará automáticamente la actualización del StreamBuilder
-                      // manipulando el estado interno ya configurado en tu constructor
-                    });
-                  }
-                },
               ),
             ],
           ),
@@ -909,16 +934,13 @@ class _AdminPageState extends State<AdminPage> {
                     final fServidor = DateTime.parse(registro['fecha_hora_servidor']);
                     final String empleadoId = registro['empleado_id']?.toString() ?? '';
 
-                    // Filtrado estricto por rango de fechas seleccionado
+                    // Filtrado estricto por rango de fechas guardado en el estado
                     final bool dentroDeFecha = fServidor.isAfter(_rangoFechas.start.subtract(const Duration(days: 1))) && 
                                                fServidor.isBefore(_rangoFechas.end.add(const Duration(days: 1)));
                     
                     if (!dentroDeFecha) return false;
-
-                    // Si no hay texto de búsqueda, pasa el filtro de fecha directamente
                     if (busqueda.isEmpty) return true;
 
-                    // Cruce en memoria en caliente para filtrar dinámicamente por nombre o nómina
                     Map<String, dynamic>? emp;
                     try {
                       emp = _empleadosRegistrados.firstWhere((e) => e['id'].toString() == empleadoId);
@@ -956,7 +978,7 @@ class _AdminPageState extends State<AdminPage> {
                       dataRowMaxHeight: 52,
                       horizontalMargin: 16,
                       columnSpacing: 24,
-                      columns: const [
+                                         columns: const [
                         DataColumn(label: Text('NÓMINA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         DataColumn(label: Text('FOTO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         DataColumn(label: Text('TRABAJADOR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
@@ -969,6 +991,7 @@ class _AdminPageState extends State<AdminPage> {
                         DataColumn(label: Text('ESTATUS LEY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                       ],
+
 
                       rows: registros.map((r) {
                         final f = DateTime.parse(r['fecha_hora_servidor']);
@@ -1098,11 +1121,17 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  void _imprimirPDF() {
+   void _imprimirPDF() {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📄 Compilando reporte en PDF...'), backgroundColor: Colors.blueGrey));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('📄 Exportando reporte del rango de ${_rangoFechas.start.day} al ${_rangoFechas.end.day}...'), 
+          backgroundColor: Colors.teal
+        )
+      );
     }
   }
+
 
   Widget _buildCardMetrica(String titulo, String valor, IconData icono, Color color) {
     return Expanded(
