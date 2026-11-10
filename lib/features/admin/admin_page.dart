@@ -2,6 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/supabase_service.dart';
 import 'package:web/web.dart' as web; // 👈 NUEVA IMPORTACIÓN OFICIAL QUE ELIMINA LAS ADVERTENCIAS
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+
 
 
 
@@ -1121,16 +1125,148 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-   void _imprimirPDF() {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('📄 Exportando reporte del rango de ${_rangoFechas.start.day} al ${_rangoFechas.end.day}...'), 
-          backgroundColor: Colors.teal
-        )
+     void _imprimirPDF() async {
+    final pdfDocument = pw.Document();
+    final String busqueda = _buscarExcelController.text.trim().toLowerCase();
+    
+    List<Map<String, dynamic>> registrosFiltrados = [];
+    try {
+      final marcasData = await SupabaseService.client
+          .from('registros_asistencia')
+          .select()
+          .order('fecha_hora_servidor', ascending: false);
+          
+      registrosFiltrados = List<Map<String, dynamic>>.from(marcasData).where((registro) {
+        final fServidor = DateTime.parse(registro['fecha_hora_servidor']);
+        final String empleadoId = registro['empleado_id']?.toString() ?? '';
+
+        final bool dentroDeFecha = fServidor.isAfter(_rangoFechas.start.subtract(const Duration(days: 1))) && 
+                                   fServidor.isBefore(_rangoFechas.end.add(const Duration(days: 1)));
+        
+        if (!dentroDeFecha) return false;
+        if (busqueda.isEmpty) return true;
+
+        Map<String, dynamic>? emp;
+        try {
+          emp = _empleadosRegistrados.firstWhere((e) => e['id'].toString() == empleadoId);
+        } catch (_) {
+          emp = null;
+        }
+
+        if (emp == null) return false;
+        final String nombre = (emp['nombre_completo'] ?? '').toString().toLowerCase();
+        final String nomina = (emp['numero_empleado'] ?? '').toString().toLowerCase();
+
+        return nombre.contains(busqueda) || nomina.contains(busqueda);
+      }).toList();
+    } catch (e) {
+      debugPrint("Error al recopilar datos para el PDF: $e");
+      return;
+    }
+
+    if (registrosFiltrados.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('⚠️ No hay registros en pantalla para exportar.'), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    }
+
+    pdfDocument.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.letter.copyWith(
+          marginBottom: 30, marginTop: 30, marginLeft: 30, marginRight: 30
+        ),
+        header: (pw.Context context) => pw.Container(
+          alignment: pw.Alignment.centerRight,
+          margin: const pw.EdgeInsets.only(bottom: 20.0),
+          child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start, // 👈 Corrección: Se agregó 'Alignment:' y los dos puntos ':'
+
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('ADMINISTRACIÓN CENTRAL - REPORTE DE ASISTENCIAS', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, color: PdfColors.teal)),
+                  pw.Text('Generado: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                ],
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text('Rango: ${_rangoFechas.start.day}/${_rangoFechas.start.month}/${_rangoFechas.start.year} al ${_rangoFechas.end.day}/${_rangoFechas.end.month}/${_rangoFechas.end.year}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.blueGrey)),
+              pw.Container(height: 1, margin: const pw.EdgeInsets.only(top: 6), color: PdfColors.teal300),
+            ],
+          ),
+        ),
+        footer: (pw.Context context) => pw.Container(
+          alignment: pw.Alignment.centerRight,
+          margin: const pw.EdgeInsets.only(top: 20.0),
+          child: pw.Text('Página ${context.pageNumber} de ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
+        ),
+        build: (pw.Context context) => [
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                children: [
+                  pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('NÓMINA', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('TRABAJADOR', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('CARGO / PUESTO', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('FECHA', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('HORA REAL', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('INCIDENCIA', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('ESTATUS LEY', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                ],
+              ),
+              ...registrosFiltrados.map((r) {
+                final f = DateTime.parse(r['fecha_hora_servidor']);
+                final String empleadoId = r['empleado_id']?.toString() ?? '';
+
+                Map<String, dynamic>? empEncontrado;
+                try {
+                  empEncontrado = _empleadosRegistrados.firstWhere((e) => e['id'].toString() == empleadoId);
+                } catch (_) {
+                  empEncontrado = null;
+                }
+
+                final String nombreTrabajador = empEncontrado != null ? (empEncontrado['nombre_completo'] ?? 'Desconocido') : 'Desconocido';
+                final String nominaTrabajador = empEncontrado != null ? (empEncontrado['numero_empleado']?.toString() ?? '----') : '----';
+                
+                final puestoData = empEncontrado != null ? empEncontrado['puestos'] as Map<String, dynamic>? : null;
+                final String cargoTrabajador = puestoData != null ? (puestoData['nombre'] ?? 'GENERAL') : 'GENERAL';
+
+                final String fechaLegible = "${f.day.toString().padLeft(2, '0')}/${f.month.toString().padLeft(2, '0')}/${f.year}";
+                final String horaLegible = "${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}:${f.second.toString().padLeft(2, '0')}";
+
+                return pw.TableRow(
+                  children: [
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(nominaTrabajador, style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(nombreTrabajador, style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(cargoTrabajador, style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(fechaLegible, style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(horaLegible, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(r['tipo_evento'] ?? 'ENTRADA', style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(r['estatus_asistencia'] ?? 'TURNO_NO_PROGRAMADO', style: const pw.TextStyle(fontSize: 8))),
+                  ],
+                );
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    try {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfDocument.save(),
+        name: 'Reporte_Asistencias_${_rangoFechas.start.day}_al_${_rangoFechas.end.day}',
       );
+    } catch (e) {
+      debugPrint("Error al desplegar layout de impresión: $e");
     }
   }
+
 
 
   Widget _buildCardMetrica(String titulo, String valor, IconData icono, Color color) {
