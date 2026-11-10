@@ -1119,11 +1119,7 @@ class _AdminPageState extends State<AdminPage> {
   
 
 
-  void _descargarExcel() {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📥 Generando archivo CSV...'), backgroundColor: Colors.teal));
-    }
-  }
+ 
 
      void _imprimirPDF() async {
     final pdfDocument = pw.Document();
@@ -1291,7 +1287,8 @@ class _AdminPageState extends State<AdminPage> {
       appBar: AppBar(
         backgroundColor: Colors.teal,
         title: const Row(children: [Text('ADMINISTRACIÓN CENTRAL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)), SizedBox(width: 12), RelojDigitalIndependiente()]),
-        actions: [IconButton(icon: const Icon(Icons.download_for_offline, color: Colors.white), onPressed: _descargarExcel), IconButton(icon: const Icon(Icons.print, color: Colors.white), onPressed: _imprimirPDF), const SizedBox(width: 10)],
+        actions: [
+           IconButton(icon: const Icon(Icons.print, color: Colors.white), onPressed: _imprimirPDF), const SizedBox(width: 10)],
       ),
       body: Row(
         children: [
