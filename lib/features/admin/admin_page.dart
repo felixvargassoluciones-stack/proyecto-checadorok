@@ -93,6 +93,8 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> _sucursalesDisponibles = [];
   List<Map<String, dynamic>> _puestosDisponibles = []; 
   List<Map<String, dynamic>> _empleadosRegistrados = []; 
+
+   List<Map<String, dynamic>> _turnosDisponibles = [];
   
   String? _empresaSeleccionadaUuid;
   String? _sucursalSeleccionadaUuid;
@@ -126,16 +128,24 @@ class _AdminPageState extends State<AdminPage> {
           .select('id, nombre, empresa_id')
           .order('nombre');
 
-      final datosPuestos = await SupabaseService.client
+           final datosPuestos = await SupabaseService.client
           .from('puestos')
           .select('id, nombre')
           .order('nombre');
+
+      // 🌟 AÑADIR ESTA CONSULTA AQUÍ PARA LLENAR LA VARIABLE GLOBAL DESDE SUPABASE:
+      final datosTurnos = await SupabaseService.client
+          .from('turnos')
+          .select('id, nombre_turno, hora_entrada, hora_salida, tolerancia_minutos')
+          .order('hora_entrada');
       
       if (mounted) {
         setState(() {
           _empresasDisponibles = List<Map<String, dynamic>>.from(datosEmpresas);
           _sucursalesDisponibles = List<Map<String, dynamic>>.from(datosSucursales);
           _puestosDisponibles = List<Map<String, dynamic>>.from(datosPuestos);
+          _turnosDisponibles = List<Map<String, dynamic>>.from(datosTurnos); // 👈 Guardar receta en memoria
+
 
           if (_empresasDisponibles.isNotEmpty && (_empresaSeleccionadaUuid == null || !_empresasDisponibles.any((e) => e['id'].toString() == _empresaSeleccionadaUuid))) {
             _empresaSeleccionadaUuid = _empresasDisponibles.first['id'].toString();
@@ -1091,12 +1101,36 @@ class _AdminPageState extends State<AdminPage> {
 
                         // 🧠 EXTRAER LAS HORAS DIRECTAS DEL TURNO EMPAREJADO POR EL RPC DE SUPABASE
                                                // ✅ CORRECCIÓN DE CAMPOS: Extraer las cadenas de texto directamente desde turnoData
-                        final turnoData = empEncontrado != null ? empEncontrado['turnos'] as Map<String, dynamic>? : null;
-                        final String tEntrada = turnoData != null ? (turnoData['hora_entrada']?.toString() ?? '06:00:00') : '06:00:00';
-                        final String tSalida = turnoData != null ? (turnoData['hora_salida']?.toString() ?? '14:00:00') : '14:00:00';
+                                                // 🧠 BUSCADOR DINÁMICO PURO: Inicializa sin ningún horario hardcodeado
+                                               String entradaVisual = '--:--';
+                        String salidaVisual = '--:--';
 
-                        final String entradaVisual = tEntrada.length >= 5 ? tEntrada.substring(0, 5) : '06:00';
-                        final String salidaVisual = tSalida.length >= 5 ? tSalida.substring(0, 5) : '14:00';
+                        try {
+                          if (_turnosDisponibles.isNotEmpty) {
+                            if (estatusLeyServidor == 'SOBRETIEMPO' || incidenciaDetectada == 'SALIDA') {
+                              final turnoMatcheado = _turnosDisponibles.reduce((a, b) {
+                                final int horaA = int.parse(a['hora_salida'].toString().split(':')[0]);
+                                final int horaB = int.parse(b['hora_salida'].toString().split(':')[0]);
+                                return (horaA - f.hour).abs() < (horaB - f.hour).abs() ? a : b;
+                              });
+                              entradaVisual = turnoMatcheado['hora_entrada'].toString().substring(0, 5);
+                              salidaVisual = turnoMatcheado['hora_salida'].toString().substring(0, 5);
+                            } else {
+                              final turnoMatcheado = _turnosDisponibles.reduce((a, b) {
+                                final int horaA = int.parse(a['hora_entrada'].toString().split(':')[0]);
+                                final int horaB = int.parse(b['hora_entrada'].toString().split(':')[0]);
+                                return (horaA - f.hour).abs() < (horaB - f.hour).abs() ? a : b;
+                              });
+                              entradaVisual = turnoMatcheado['hora_entrada'].toString().substring(0, 5);
+                              salidaVisual = turnoMatcheado['hora_salida'].toString().substring(0, 5);
+                            }
+                          }
+                        } catch (eTurno) {
+                          debugPrint("Error analítico en correspondencia dinámica: $eTurno");
+                        }
+
+
+
 
                         String? urlFinalFoto;
                         if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty && selfieUrlCampo.startsWith('http')) {
