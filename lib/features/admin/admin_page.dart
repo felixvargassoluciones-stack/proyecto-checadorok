@@ -1066,14 +1066,13 @@ class _AdminPageState extends State<AdminPage> {
                       ],
 
 
-                                        rows: registros.map((r) {
+                                          rows: registros.map((r) {
                         final f = DateTime.parse(r['fecha_hora_servidor']);
                         final String empleadoId = r['empleado_id']?.toString() ?? '';
                         final String selfieUrlCampo = r['selfie_url']?.toString() ?? 'EMPTY';
                         final String incidenciaDetectada = r['tipo_evento'] ?? 'ENTRADA';
                         
-                        // 🌟 CONEXIÓN DIRECTA CON EL ESTADO DEL SERVIDOR:
-                        // Jalamos el estatus de ley calculado de forma exacta por el RPC en Supabase
+                        // 🌟 CONEXIÓN DIRECTA CON EL ESTADO INTELIGENTE DEL SERVIDOR:
                         final String estatusLeyServidor = r['estatus_asistencia'] ?? 'ASISTENCIA';
 
                         // Cruce relacional básico en memoria para nombres y puestos
@@ -1090,10 +1089,14 @@ class _AdminPageState extends State<AdminPage> {
                         final puestoData = empEncontrado != null ? empEncontrado['puestos'] as Map<String, dynamic>? : null;
                         final String cargoTrabajador = puestoData != null ? (puestoData['nombre'] ?? 'GENERAL') : 'GENERAL';
 
-                        // Mapeo visual del horario del turno para información estática en la celda
+                        // 🧠 EXTRAER LAS HORAS DIRECTAS DEL TURNO EMPAREJADO POR EL RPC DE SUPABASE
+                                               // ✅ CORRECCIÓN DE CAMPOS: Extraer las cadenas de texto directamente desde turnoData
                         final turnoData = empEncontrado != null ? empEncontrado['turnos'] as Map<String, dynamic>? : null;
-                        final String tEntrada = turnoData != null ? (turnoData['hora_entrada'] ?? '08:00:00') : '08:00:00';
-                        final String tSalida = turnoData != null ? (turnoData['hora_salida'] ?? '17:00:00') : '17:00:00';
+                        final String tEntrada = turnoData != null ? (turnoData['hora_entrada']?.toString() ?? '06:00:00') : '06:00:00';
+                        final String tSalida = turnoData != null ? (turnoData['hora_salida']?.toString() ?? '14:00:00') : '14:00:00';
+
+                        final String entradaVisual = tEntrada.length >= 5 ? tEntrada.substring(0, 5) : '06:00';
+                        final String salidaVisual = tSalida.length >= 5 ? tSalida.substring(0, 5) : '14:00';
 
                         String? urlFinalFoto;
                         if (selfieUrlCampo != 'EMPTY' && selfieUrlCampo.isNotEmpty && selfieUrlCampo.startsWith('http')) {
@@ -1164,9 +1167,13 @@ class _AdminPageState extends State<AdminPage> {
                           DataCell(Text(cargoTrabajador, style: const TextStyle(fontSize: 13, color: Colors.black54))),
                           DataCell(Text(fechaLegible, style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
                           DataCell(Text(horaLegible, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.teal.shade700))),
-                          DataCell(Text('${tEntrada.substring(0,5)} - ${tSalida.substring(0,5)}', style: const TextStyle(fontSize: 13, color: Colors.black87))),
-                          // Columna de minutos informativos simplificados
-                          DataCell(Text(estatusLeyServidor == 'RETARDO' ? 'Retardo' : '0 min', style: TextStyle(fontSize: 13, color: estatusLeyServidor == 'RETARDO' ? Colors.amber.shade900 : Colors.black54))),
+                          
+                          // 7. ✅ TURNO HORARIO DINÁMICO REPARADO
+                          DataCell(Text('$entradaVisual - $salidaVisual', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87))),
+                          
+                          // 8. ✅ MINUTOS INFORMATIVOS SEGÚN EL CASO REAL
+                          DataCell(Text(estatusLeyServidor == 'RETARDO' ? 'Con Retardo' : (estatusLeyServidor == 'SOBRETIEMPO' ? 'Tiempo Extra' : '0 min'), style: TextStyle(fontSize: 13, fontWeight: estatusLeyServidor != 'ASISTENCIA' ? FontWeight.bold : FontWeight.normal, color: estatusLeyServidor == 'RETARDO' || estatusLeyServidor == 'FALTA' ? Colors.red.shade700 : Colors.black54))),
+                          
                           DataCell(
                             Chip(
                               label: Text(incidenciaDetectada, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
@@ -1174,7 +1181,6 @@ class _AdminPageState extends State<AdminPage> {
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                           ),
-                          // Celda de Estatus real sincronizada con Supabase
                           DataCell(Text(estatusLeyServidor, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colorEstatus))),
                           DataCell(
                             IconButton(
@@ -1190,6 +1196,7 @@ class _AdminPageState extends State<AdminPage> {
                           ),
                         ]);
                       }).toList(),
+
 
 
                     ),
