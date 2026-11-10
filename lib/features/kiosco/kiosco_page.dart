@@ -100,10 +100,9 @@ class _KioscoPageState extends State<KioscoPage> {
     });
     _apagarCamara();
   }
-  Future<void> _procesarMarcajeAsistencia() async {
+    Future<void> _procesarMarcajeAsistencia() async {
     if (_pinActual.length != 4 || _estaProcesando) return;
 
-    // Validación extra de protección: Si por alguna razón la cámara se cayó, no procesar
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('⚠️ Sensor de cámara no listo. Espera un momento.'), backgroundColor: Colors.orange),
@@ -116,50 +115,13 @@ class _KioscoPageState extends State<KioscoPage> {
     try {
       final ahora = DateTime.now();
       String urlPublicaSelfie = 'EMPTY';
-      String eventoCalculadoAutomatizado = 'ENTRADA';
 
-      final empleadoData = await SupabaseService.client
-          .from('empleados')
-          .select('id, nombre_completo, sucursal_id')
-          .eq('pin_acceso', _pinActual)
-          .eq('activo', true)
-          .maybeSingle();
-
-      if (empleadoData == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⚠️ PIN de acceso incorrecto o empleado inactivo.'), backgroundColor: Colors.orange),
-        );
-        _limpiarPin();
-        return;
-      }
-
-      final String empleadoUuid = empleadoData['id'].toString();
-      final String nombreTrabajador = empleadoData['nombre_completo'] ?? "Empleado";
-      final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
-
-      final String fechaHoyInicio = DateTime(ahora.year, ahora.month, ahora.day).toIso8601String();
-      final String fechaHoyFin = DateTime(ahora.year, ahora.month, ahora.day, 23, 59, 59).toIso8601String();
-
-      final registroPrevioDeHoy = await SupabaseService.client
-          .from('registros_asistencia')
-          .select('id, tipo_evento')
-          .eq('empleado_id', empleadoUuid)
-          .gte('fecha_hora_servidor', fechaHoyInicio)
-          .lte('fecha_hora_servidor', fechaHoyFin)
-          .eq('tipo_evento', 'ENTRADA')
-          .maybeSingle();
-
-      if (registroPrevioDeHoy != null) {
-        eventoCalculadoAutomatizado = 'SALIDA';
-      }
-
-      // Captura segura garantizada
+      // 📷 1. CAPTURA Y SUBIDA SEGURA DE LA FOTO ANTES DE LLAMAR AL PROCEDIMIENTO
       try {
         final XFile file = await _cameraController!.takePicture();
         final Uint8List bytesFoto = await file.readAsBytes();
         
-        final String nombreArchivo = '${ahora.millisecondsSinceEpoch}_$empleadoUuid.jpg';
+        final String nombreArchivo = '${ahora.millisecondsSinceEpoch}_$_pinActual.jpg';
         final String rutaStorage = 'asistencias/$nombreArchivo';
 
         await SupabaseService.storage.from('asistencias_selfies').uploadBinary(
@@ -173,32 +135,46 @@ class _KioscoPageState extends State<KioscoPage> {
             .getPublicUrl(rutaStorage);
 
       } catch (eCamera) {
-        debugPrint("Advertencia en captura de evidencia: $eCamera");
+        debugPrint("Advertencia en captura de evidencia visual: $eCamera");
         urlPublicaSelfie = 'FALLO_FOTO';
       }
 
-      await SupabaseService.client.from('registros_asistencia').insert({
-        'empleado_id': empleadoUuid,
-        'sucursal_id': sucursalUuid,
-        'tipo_evento': eventoCalculadoAutomatizado,
-        'fecha_hora_servidor': ahora.toIso8601String(),
-        'dispositivo_info': 'Kiosco Inteligente Automatizado (Web Móvil)',
-        'estatus_asistencia': 'TURNO_NO_PROGRAMADO',
-        'selfie_url': urlPublicaSelfie,
-      });
+      // 🧠 2. CONEXIÓN AL CEREBRO DE SUPABASE (Invocación RPC de la Receta Global)
+      final List<dynamic> respuestaRpc = await SupabaseService.client.rpc(
+        'registrar_marcaje_inteligente',
+        params: {
+          'p_pin_acceso': _pinActual,
+          'p_selfie_url': urlPublicaSelfie,
+          'p_dispositivo_info': 'Kiosco con Receta Global Automatizada (Web Móvil)',
+        },
+      );
+
+      if (respuestaRpc.isEmpty) throw 'No se recibió respuesta del servidor de asistencia.';
+      
+      final Map<String, dynamic> resultado = Map<String, dynamic>.from(respuestaRpc.first);
+      final String status = resultado['status_operacion'] ?? 'ERROR';
+      final String mensaje = resultado['mensaje_pantalla'] ?? 'Error desconocido';
+      final String evento = resultado['evento_detectado'] ?? 'ENTRADA';
 
       if (!mounted) return;
 
-      _mostrarDialogoExito(
-        nombreEmpleado: nombreTrabajador,
-        tipoEvento: eventoCalculadoAutomatizado,
-      );
+      // 📝 3. EVALUACIÓN DE RESPUESTA PARA LA INTERFAZ GRÁFICA
+      if (status == 'SUCCESS') {
+        _mostrarDialogoExito(
+          nombreEmpleado: mensaje, // Muestra el nombre devuelto por el procedimiento SQL
+          tipoEvento: evento,      // Muestra 'ENTRADA' o 'SALIDA' calculado por la tarjeta perforada
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(mensaje), backgroundColor: Colors.orange.shade800),
+        );
+      }
 
       _limpiarPin();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error de comunicación: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Error de comunicación con la Receta Global: $e'), backgroundColor: Colors.red),
       );
       _apagarCamara();
     } finally {
@@ -207,6 +183,7 @@ class _KioscoPageState extends State<KioscoPage> {
       }
     }
   }
+
 
   void _mostrarDialogoExito({required String nombreEmpleado, required String tipoEvento}) {
     final ahora = DateTime.now();
