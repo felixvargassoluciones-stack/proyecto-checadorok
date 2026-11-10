@@ -20,6 +20,9 @@ class _KioscoPageState extends State<KioscoPage> {
   String _pinActual = "";
   Timer? _relojTimer;
   String _horaDigital = "00:00:00";
+  
+  // 🌟 NUEVA VARIABLE: Controla si el PIN se muestra o se oculta como asteriscos
+  bool _ocultarPin = true;
 
   @override
   void initState() {
@@ -87,12 +90,7 @@ class _KioscoPageState extends State<KioscoPage> {
     if (_pinActual.length == 1) {
       _inicializarCamaraFrontal();
     }
-    
-    // 🌟 DISPARO AUTOMÁTICO REVOLUCIONARIO (Estilo Tarjeta Perforada):
-    // Al completar los 4 números del PIN se activa el marcaje de forma instantánea
-    if (_pinActual.length == 4) {
-      _procesarMarcajeAsistencia();
-    }
+    // ✅ SE REMOVIÓ EL DISPARO AUTOMÁTICO INMEDIATO PARA ESPERAR EL BOTÓN SEGURO
   }
 
   void _limpiarPin() {
@@ -105,14 +103,21 @@ class _KioscoPageState extends State<KioscoPage> {
   Future<void> _procesarMarcajeAsistencia() async {
     if (_pinActual.length != 4 || _estaProcesando) return;
 
+    // Validación extra de protección: Si por alguna razón la cámara se cayó, no procesar
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⚠️ Sensor de cámara no listo. Espera un momento.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
     setState(() => _estaProcesando = true);
     
     try {
-      final ahora = DateTime.now(); // Hora local exacta del reloj del Kiosco
+      final ahora = DateTime.now();
       String urlPublicaSelfie = 'EMPTY';
       String eventoCalculadoAutomatizado = 'ENTRADA';
 
-      // 🔍 1. VALIDACIÓN PREVIA POR LA COLUMNA PIN_ACCESO
       final empleadoData = await SupabaseService.client
           .from('empleados')
           .select('id, nombre_completo, sucursal_id')
@@ -123,10 +128,7 @@ class _KioscoPageState extends State<KioscoPage> {
       if (empleadoData == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ PIN de acceso incorrecto o empleado inactivo.'),
-            backgroundColor: Colors.orange,
-          ),
+          const SnackBar(content: Text('⚠️ PIN de acceso incorrecto o empleado inactivo.'), backgroundColor: Colors.orange),
         );
         _limpiarPin();
         return;
@@ -136,7 +138,6 @@ class _KioscoPageState extends State<KioscoPage> {
       final String nombreTrabajador = empleadoData['nombre_completo'] ?? "Empleado";
       final String sucursalUuid = empleadoData['sucursal_id'] ?? '91995ded-ff29-41b7-8198-08ca6cb94fb3';
 
-      // 🔍 2. INTELIGENCIA AUTOMÁTICA: Escanear si el trabajador ya checó una ENTRADA hoy
       final String fechaHoyInicio = DateTime(ahora.year, ahora.month, ahora.day).toIso8601String();
       final String fechaHoyFin = DateTime(ahora.year, ahora.month, ahora.day, 23, 59, 59).toIso8601String();
 
@@ -149,42 +150,38 @@ class _KioscoPageState extends State<KioscoPage> {
           .eq('tipo_evento', 'ENTRADA')
           .maybeSingle();
 
-      // Si el motor encuentra un registro previo de ENTRADA hoy, define la marca actual como SALIDA
       if (registroPrevioDeHoy != null) {
         eventoCalculadoAutomatizado = 'SALIDA';
       }
 
-      // 📷 3. CAPTURA Y SUBIDA ESTABLE A STORAGE
-      if (_cameraController != null && _cameraController!.value.isInitialized) {
-        try {
-          final XFile file = await _cameraController!.takePicture();
-          final Uint8List bytesFoto = await file.readAsBytes();
-          
-          final String nombreArchivo = '${ahora.millisecondsSinceEpoch}_$empleadoUuid.jpg';
-          final String rutaStorage = 'asistencias/$nombreArchivo';
+      // Captura segura garantizada
+      try {
+        final XFile file = await _cameraController!.takePicture();
+        final Uint8List bytesFoto = await file.readAsBytes();
+        
+        final String nombreArchivo = '${ahora.millisecondsSinceEpoch}_$empleadoUuid.jpg';
+        final String rutaStorage = 'asistencias/$nombreArchivo';
 
-          await SupabaseService.storage.from('asistencias_selfies').uploadBinary(
-                rutaStorage,
-                bytesFoto,
-                fileOptions: const FileOptions(contentType: 'image/jpeg'),
-              );
+        await SupabaseService.storage.from('asistencias_selfies').uploadBinary(
+              rutaStorage,
+              bytesFoto,
+              fileOptions: const FileOptions(contentType: 'image/jpeg'),
+            );
 
-          urlPublicaSelfie = SupabaseService.storage
-              .from('asistencias_selfies')
-              .getPublicUrl(rutaStorage);
+        urlPublicaSelfie = SupabaseService.storage
+            .from('asistencias_selfies')
+            .getPublicUrl(rutaStorage);
 
-        } catch (eCamera) {
-          debugPrint("Advertencia en captura de evidencia: $eCamera");
-          urlPublicaSelfie = 'FALLO_FOTO';
-        }
+      } catch (eCamera) {
+        debugPrint("Advertencia en captura de evidencia: $eCamera");
+        urlPublicaSelfie = 'FALLO_FOTO';
       }
 
-      // 📝 4. INSERCIÓN DEL REGISTRO CON EL EVENTO GENERADO Y LA HORA LOCAL EN ISO-8601
       await SupabaseService.client.from('registros_asistencia').insert({
         'empleado_id': empleadoUuid,
         'sucursal_id': sucursalUuid,
-        'tipo_evento': eventoCalculadoAutomatizado, // Inserta 'ENTRADA' o 'SALIDA' según corresponda
-        'fecha_hora_servidor': ahora.toIso8601String(), // Se guarda la estampa con zona horaria local corregida
+        'tipo_evento': eventoCalculadoAutomatizado,
+        'fecha_hora_servidor': ahora.toIso8601String(),
         'dispositivo_info': 'Kiosco Inteligente Automatizado (Web Móvil)',
         'estatus_asistencia': 'TURNO_NO_PROGRAMADO',
         'selfie_url': urlPublicaSelfie,
@@ -192,7 +189,6 @@ class _KioscoPageState extends State<KioscoPage> {
 
       if (!mounted) return;
 
-      // Desplegar diálogo de éxito con el veredicto síncrono que devolvió el servidor
       _mostrarDialogoExito(
         nombreEmpleado: nombreTrabajador,
         tipoEvento: eventoCalculadoAutomatizado,
@@ -211,6 +207,7 @@ class _KioscoPageState extends State<KioscoPage> {
       }
     }
   }
+
   void _mostrarDialogoExito({required String nombreEmpleado, required String tipoEvento}) {
     final ahora = DateTime.now();
     final horaChecado = "${ahora.hour.toString().padLeft(2, '0')}:${ahora.minute.toString().padLeft(2, '0')}";
@@ -235,7 +232,6 @@ class _KioscoPageState extends State<KioscoPage> {
       },
     );
   }
-
   Widget _buildSeccionVisual() {
     return Container(
       color: const Color(0xFF0D5C46), width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
@@ -262,7 +258,15 @@ class _KioscoPageState extends State<KioscoPage> {
           style: ElevatedButton.styleFrom(backgroundColor: esEspecial ? Colors.blueGrey : Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.grey))),
           onPressed: () {
             if (boton == 'C') { _limpiarPin(); }
-            else if (boton == '⌫') { if (_pinActual.isNotEmpty) { setState(() { _pinActual = _pinActual.substring(0, _pinActual.length - 1); _pinController.text = _pinActual; }); if (_pinActual.isEmpty) { _apagarCamara(); } } }
+            else if (boton == '⌫') { 
+              if (_pinActual.isNotEmpty) { 
+                setState(() { 
+                  _pinActual = _pinActual.substring(0, _pinActual.length - 1); 
+                  _pinController.text = _pinActual; 
+                }); 
+                if (_pinActual.isEmpty) { _apagarCamara(); } 
+              } 
+            }
             else { _agregarDigito(boton); }
           },
           child: Text(boton, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: esEspecial ? Colors.white : const Color(0xFF2D3748))),
@@ -273,6 +277,11 @@ class _KioscoPageState extends State<KioscoPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 🌟 VALIDACIÓN DE CANDADO CRÍTICA:
+    // El botón solo se activa si el PIN tiene 4 dígitos Y la cámara ya está 100% lista en pantalla
+    final bool camaraLista = _cameraController != null && _cameraController!.value.isInitialized;
+    final bool sePuedeRegistrar = _pinActual.length == 4 && camaraLista && !_estaProcesando;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
@@ -281,8 +290,62 @@ class _KioscoPageState extends State<KioscoPage> {
             : LayoutBuilder(builder: (context, constraints) {
                 return Column(children: [
                   _buildSeccionVisual(),
-                  // Interfaz limpia: Solo caja de PIN y teclado numérico expandido
-                  Expanded(child: SingleChildScrollView(physics: const AlwaysScrollableScrollPhysics(), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0), child: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: _pinController, readOnly: true, obscureText: true, textAlign: TextAlign.center, style: const TextStyle(fontSize: 28, letterSpacing: 16, fontWeight: FontWeight.bold), decoration: InputDecoration(hintText: '••••', hintStyle: const TextStyle(color: Colors.black26, letterSpacing: 16), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(vertical: 12))), const SizedBox(height: 16), _buildTecladoNumerico()]))))
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(), 
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0), 
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min, 
+                          children: [
+                            // 🌟 CAJA DE TEXTO DEL PIN CON ICONO DE OJO INTERACTIVO
+                            TextField(
+                              controller: _pinController, 
+                              readOnly: true, 
+                              obscureText: _ocultarPin, // Alterna entre asteriscos o números claros
+                              textAlign: TextAlign.center, 
+                              style: TextStyle(fontSize: 28, letterSpacing: _ocultarPin ? 16 : 6, fontWeight: FontWeight.bold), 
+                              decoration: InputDecoration(
+                                hintText: '••••', 
+                                hintStyle: const TextStyle(color: Colors.black26, letterSpacing: 16), 
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), 
+                                filled: true, 
+                                fillColor: Colors.white, 
+                                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                suffixIcon: IconButton(
+                                  icon: Icon(_ocultarPin ? Icons.visibility_off : Icons.visibility, color: Colors.blueGrey),
+                                  onPressed: () => setState(() => _ocultarPin = !_ocultarPin),
+                                ),
+                              ),
+                            ), 
+                            const SizedBox(height: 16), 
+                            _buildTecladoNumerico(),
+                            const SizedBox(height: 20),
+                            
+                            // 🌟 NUEVO BOTÓN CORPORATIVO AUTOMATIZADO CON VALIDACIÓN DE HARDWARE
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.teal.shade700,
+                                  disabledBackgroundColor: Colors.grey.shade300,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  elevation: sePuedeRegistrar ? 2 : 0,
+                                ),
+                                icon: Icon(Icons.fingerprint, color: sePuedeRegistrar ? Colors.white : Colors.grey),
+                                label: Text(
+                                  camaraLista ? 'REGISTRAR ASISTENCIA' : '⚡ ESPERANDO SENSOR CÁMARA...',
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: sePuedeRegistrar ? Colors.white : Colors.grey.shade500),
+                                ),
+                                onPressed: sePuedeRegistrar ? _procesarMarcajeAsistencia : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
                 ]);
               }),
       ),
