@@ -68,7 +68,7 @@ class _AdminPageState extends State<AdminPage> {
     end: DateTime.now(),
   );
 
-  // Controladores de Texto del Formulario
+   // Controladores de Texto del Formulario Existentes
   final TextEditingController _nombreController = TextEditingController();
   final TextEditingController _pinAltaController = TextEditingController();
   final TextEditingController _numeroEmpleadoController = TextEditingController();
@@ -78,7 +78,15 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController _nuevoPuestoController = TextEditingController(); 
   final TextEditingController _buscarExcelController = TextEditingController(); 
 
-  bool _guardandoEmpleado = false;
+  // 🌟 PEGAR AQUÍ LOS NUEVOS CONTROLADORES PARA EL MÓDULO DE TURNOS:
+  final TextEditingController _nombreTurnoController = TextEditingController();
+  final TextEditingController _horaEntradaController = TextEditingController();
+  final TextEditingController _horaSalidaController = TextEditingController();
+  final TextEditingController _toleranciaController = TextEditingController(text: '15');
+  
+
+
+  bool _guardandoEmpleado = false; // Continúa el código original de variables...
 
   // Listas de Catálogos e Historiales
   List<Map<String, dynamic>> _empresasDisponibles = [];
@@ -167,7 +175,7 @@ class _AdminPageState extends State<AdminPage> {
   }
 
 
-  @override
+   @override
   void dispose() {
     _nombreController.dispose();
     _pinAltaController.dispose();
@@ -177,8 +185,16 @@ class _AdminPageState extends State<AdminPage> {
     _correoController.dispose();
     _nuevoPuestoController.dispose();
     _buscarExcelController.dispose();
+    
+    // 🌟 NUEVAS LÍNEAS DE LIMPIEZA A AGREGAR:
+    _nombreTurnoController.dispose();
+    _horaEntradaController.dispose();
+    _horaSalidaController.dispose();
+    _toleranciaController.dispose();
+    
     super.dispose();
   }
+
     Future<void> _modificarEmpresaDialog() async {
     if (_empresaSeleccionadaUuid == null) return;
     final empresaActual = _empresasDisponibles.firstWhere((e) => e['id'].toString() == _empresaSeleccionadaUuid);
@@ -489,15 +505,64 @@ class _AdminPageState extends State<AdminPage> {
     try {
       await SupabaseService.client.from('empleados').delete().eq('id', id);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('🗑️ Registro de "$nombre" eliminado.'), backgroundColor: Colors.red.shade800));
-      if (_empleadoIdEdicion == id) _cancelarEdicion();
+           if (_empleadoIdEdicion == id) _cancelarEdicion();
       await _cargarListaEmpleadosExcel();
         } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
-  } // 👈 Esta es la llave de cierre de _eliminarEmpleado (Línea 393)
+  } // 👈 Esta es la línea 391 (Llenera de cierre de _eliminarEmpleado)
 
+
+  // 🌟 COPIA Y PEGA ESTE BLOQUE AQUÍ EN ESTE ESPACIO EN BLANCO:
+  Future<void> _registrarNuevoTurno() async {
+    final String nombre = _nombreTurnoController.text.trim();
+    final String entrada = _horaEntradaController.text.trim();
+    final String salida = _horaSalidaController.text.trim();
+    final int tolerancia = int.tryParse(_toleranciaController.text.trim()) ?? 0;
+
+    if (nombre.isEmpty || entrada.isEmpty || salida.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⚠️ Por favor, llena todos los campos obligatorios del turno.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    setState(() => _cargandoDatos = true);
+
+    try {
+      await SupabaseService.client.from('turnos').insert({
+        'nombre_turno': nombre.toUpperCase(),
+        'hora_entrada': entrada.contains(':') && entrada.split(':').length == 2 ? '$entrada:00' : entrada,
+        'hora_salida': salida.contains(':') && salida.split(':').length == 2 ? '$salida:00' : salida,
+        'tolerancia_minutos': tolerancia,
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Turno guardado con éxito en la Receta Global.'), backgroundColor: Colors.green),
+      );
+
+      _nombreTurnoController.clear();
+      _horaEntradaController.clear();
+      _horaSalidaController.clear();
+      _toleranciaController.text = '15';
+      
+      _cargarEstructuraCorporativa();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar el turno: $e'), backgroundColor: Colors.red),
+        );
+      }
+      setState(() => _cargandoDatos = false);
+    }
+  }
+
+
+  // 🌟 Aquí abajo continúa tu función existente (Línea 395 aprox):
   // 🌟 PEGAR AQUÍ LA NUEVA FUNCIÓN DE ASISTENCIA INDIVIDUAL:
   Future<void> _eliminarRegistroAsistencia(String id, String nombreEmpleado, String tipo) async {
+
     final bool? confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -572,7 +637,7 @@ class _AdminPageState extends State<AdminPage> {
     });
   }
 
-  Widget _buildSidebarMenu() {
+   Widget _buildSidebarMenu() {
     return Container(
       width: 240,
       color: const Color(0xFF1E293B), 
@@ -593,12 +658,15 @@ class _AdminPageState extends State<AdminPage> {
           _buildItemSidebar(id: 'INICIO', titulo: 'Inicio / Dashboard', icono: Icons.dashboard),
           _buildItemSidebar(id: 'REGISTRO', titulo: 'Registro de Personal', icono: Icons.person_add_alt_1),
           _buildItemSidebar(id: 'MONITOREO', titulo: 'Monitoreo Asistencias', icono: Icons.playlist_add_check_circle),
+          // 🌟 NUEVO BOTÓN LATERAL: Módulo de Receta de Turnos
+          _buildItemSidebar(id: 'TURNOS', titulo: 'Configuración de Turnos', icono: Icons.more_time_rounded),
           const Spacer(),
           const Padding(padding: EdgeInsets.all(16.0), child: Text('v2.4.0 - Buscador & Ingreso', style: TextStyle(color: Colors.white30, fontSize: 11)))
         ],
       ),
     );
   }
+
 
   Widget _buildItemSidebar({required String id, required String titulo, required IconData icono}) {
     final bool esActivo = _seccionActivaSidebar == id;
@@ -1327,18 +1395,105 @@ class _AdminPageState extends State<AdminPage> {
                   Expanded(
                     child: LayoutBuilder(builder: (context, constraints) {
                       final bool esMovil = constraints.maxWidth < 750;
-                      if (_seccionActivaSidebar == 'INICIO') {
-                        return Container(
-                          width: double.infinity, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
-                          child: const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.dashboard_customize, size: 65, color: Colors.teal), SizedBox(height: 16), Text('¡Bienvenido al Panel de Control de Asistencia!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)), SizedBox(height: 6), Text('Selecciona una opción del menú de la izquierda para comenzar.', style: TextStyle(fontSize: 13, color: Colors.grey))])),
-                        );
-                      } else if (_seccionActivaSidebar == 'REGISTRO') {
-                        return esMovil
-                            ? SingleChildScrollView(child: Column(children: [SizedBox(height: 600, child: _buildFormularioAltaPersonal()), const SizedBox(height: 20), SizedBox(height: 400, child: _buildTablaEmpleadosExcel())]))
-                            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 320, child: _buildFormularioAltaPersonal()), const SizedBox(width: 16), Expanded(child: _buildTablaEmpleadosExcel())]);
-                      } else {
-                        return _buildSeccionFeedMonitoreo();
-                      }
+                                     if (_seccionActivaSidebar == 'INICIO') {
+                  return Container(
+                    width: double.infinity, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
+                    child: const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.dashboard_customize, size: 65, color: Colors.teal), SizedBox(height: 16), Text('¡Bienvenido al Panel de Control de Asistencia!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)), SizedBox(height: 6), Text('Selecciona una opción del menú de la izquierda para comenzar.', style: TextStyle(fontSize: 13, color: Colors.grey))])),
+                  );
+                } else if (_seccionActivaSidebar == 'REGISTRO') {
+                  return esMovil
+                      ? SingleChildScrollView(child: Column(children: [SizedBox(height: 600, child: _buildFormularioAltaPersonal()), const SizedBox(height: 20), SizedBox(height: 400, child: _buildTablaEmpleadosExcel())]))
+                      : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 320, child: _buildFormularioAltaPersonal()), const SizedBox(width: 16), Expanded(child: _buildTablaEmpleadosExcel())]);
+                } else if (_seccionActivaSidebar == 'MONITOREO') {
+                  return _buildSeccionFeedMonitoreo();
+                } else {
+                  // 🌟 INTERFAZ COMPLETA DE TURNOS: FORMULARIO Y HOJA DE CÁLCULO DERECHA REACTIVA
+                  return Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 320,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(children: [Icon(Icons.more_time, color: Colors.teal, size: 20), SizedBox(width: 8), Text('PROGRAMACIÓN DE TURNOS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey))]),
+                                const Divider(height: 20),
+                                const Text('Nombre del Turno:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                const SizedBox(height: 6),
+                                TextFormField(controller: _nombreTurnoController, textCapitalization: TextCapitalization.characters, decoration: InputDecoration(hintText: 'Ej: PRIMER TURNO', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
+                                const SizedBox(height: 12),
+                                const Text('Hora de Entrada (24 hrs):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                const SizedBox(height: 6),
+                                TextFormField(controller: _horaEntradaController, decoration: InputDecoration(hintText: 'Ej: 06:00', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
+                                const SizedBox(height: 12),
+                                const Text('Hora de Salida (24 hrs):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                const SizedBox(height: 6),
+                                TextFormField(controller: _horaSalidaController, decoration: InputDecoration(hintText: 'Ej: 14:00', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
+                                const SizedBox(height: 12),
+                                const Text('Tolerancia (Minutos):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                const SizedBox(height: 6),
+                                TextFormField(controller: _toleranciaController, keyboardType: TextInputType.number, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
+                                const SizedBox(height: 20),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                                    onPressed: _registrarNuevoTurno,
+                                    icon: const Icon(Icons.save, color: Colors.white, size: 16),
+                                    label: const Text('Guardar Turno en Receta', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
+                            child: StreamBuilder<List<Map<String, dynamic>>>(
+                              stream: SupabaseService.client.from('turnos').stream(primaryKey: ['id']).order('nombre_turno'),
+                              builder: (context, snapshot) {
+                                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.teal));
+                                final tLista = snapshot.data!;
+                                return SingleChildScrollView(
+                                  scrollDirection: Axis.vertical,
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
+                                      dataRowMinHeight: 38, dataRowMaxHeight: 42,
+                                      columns: const [
+                                        DataColumn(label: Text('NOMBRE DEL TURNO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('HORA ENTRADA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('HORA SALIDA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('TOLERANCIA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                      ],
+                                      rows: tLista.map((t) {
+                                        return DataRow(cells: [
+                                          DataCell(Text(t['nombre_turnos']?.toString() ?? t['nombre_turno']?.toString() ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                          DataCell(Text(t['hora_entrada']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
+                                          DataCell(Text(t['hora_salida']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
+                                          DataCell(Text('${t['tolerancia_minutos']} min', style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
+                                        ]);
+                                      }).toList(),
+                                    ),
+                                  ),
+                                );
+                              }
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                     }),
                   ),
                 ],
