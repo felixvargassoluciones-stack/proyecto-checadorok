@@ -649,8 +649,7 @@ class _AdminPageState extends State<AdminPage> {
 
   // 🌟 Aquí abajo continúa tu función existente (Línea 395 aprox):
   // 🌟 PEGAR AQUÍ LA NUEVA FUNCIÓN DE ASISTENCIA INDIVIDUAL:
-  Future<void> _eliminarRegistroAsistencia(String id, String nombreEmpleado, String tipo) async {
-
+   Future<void> _eliminarRegistroAsistencia(String id, String nombreEmpleado, String tipo, String? selfieUrl) async {
     final bool? confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -662,7 +661,7 @@ class _AdminPageState extends State<AdminPage> {
             Text('⚠️ ¿Eliminar Registro?', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        content: Text('¿Estás seguro de que deseas eliminar permanentemente el registro de $tipo para "$nombreEmpleado"?'),
+        content: Text('¿Estás seguro de que deseas eliminar permanentemente el registro de $tipo para "$nombreEmpleado" y su fotografía?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -680,10 +679,20 @@ class _AdminPageState extends State<AdminPage> {
     if (confirmar != true) return;
 
     try {
+      // 1. Si tiene fotografía en Storage, extraer su ruta y eliminarla del bucket
+      if (selfieUrl != null && selfieUrl.contains('/asistencias_selfies/')) {
+        final String rutaArchivo = Uri.decodeFull(selfieUrl.split('/asistencias_selfies/').last);
+        if (rutaArchivo.isNotEmpty) {
+          await SupabaseService.client.storage.from('asistencias_selfies').remove([rutaArchivo]);
+        }
+      }
+
+      // 2. Eliminar el registro de asistencia en la base de datos
       await SupabaseService.client.from('registros_asistencia').delete().eq('id', id);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('🗑️ Registro de asistencia eliminado con éxito.'), backgroundColor: Colors.red),
+          const SnackBar(content: Text('🗑️ Registro y fotografía eliminados con éxito.'), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
@@ -694,6 +703,7 @@ class _AdminPageState extends State<AdminPage> {
       }
     }
   }
+
 
   void _activarModoEdicion(Map<String, dynamic> emp) { // 👈 Aquí inicia la siguiente función original (Línea 395)
     setState(() {
@@ -1278,7 +1288,8 @@ class _AdminPageState extends State<AdminPage> {
                               onPressed: () => _eliminarRegistroAsistencia(
                                 r['id'].toString(), 
                                 nombreTrabajador, 
-                                incidenciaDetectada
+                                incidenciaDetectada,
+                                urlFinalFoto,
                               ),
                             ),
                           ),
@@ -1729,7 +1740,8 @@ class _AdminPageState extends State<AdminPage> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(backgroundColor: _turnoIdEdicion == null ? Colors.teal : Colors.amber.shade800, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                onPressed: _registrarNuevoTurno,
+                                onPressed: _cargandoDatos ? null : _registrarNuevoTurno,
+
                 icon: Icon(_turnoIdEdicion == null ? Icons.save : Icons.edit, color: Colors.white, size: 16),
                 label: Text(_turnoIdEdicion == null ? 'Guardar Turno en Receta' : 'Actualizar Turno', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
@@ -1741,50 +1753,46 @@ class _AdminPageState extends State<AdminPage> {
       ),
     );
 
-    final tablaTurnosWidget = Container(
+        final tablaTurnosWidget = Container(
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
-      child: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: SupabaseService.client.from('turnos').stream(primaryKey: ['id']).order('nombre_turno'),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: CircularProgressIndicator(color: Colors.teal)));
-          final tLista = snapshot.data!;
-          return SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
-                dataRowMinHeight: 38,
-                dataRowMaxHeight: 42,
-                columns: const [
-                  DataColumn(label: Text('NOMBRE DEL TURNO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  DataColumn(label: Text('HORA ENTRADA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  DataColumn(label: Text('HORA SALIDA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  DataColumn(label: Text('TOLERANCIA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                ],
-                rows: tLista.map((t) {
-                  return DataRow(cells: [
-                    DataCell(Text(t['nombre_turnos']?.toString() ?? t['nombre_turno']?.toString() ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-                    DataCell(Text(t['hora_entrada']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
-                    DataCell(Text(t['hora_salida']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
-                    DataCell(Text('${t['tolerancia_minutos']} min', style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
-                    DataCell(Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(icon: const Icon(Icons.edit, color: Colors.amber, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _activarEdicionTurno(t)),
-                        const SizedBox(width: 10),
-                        IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _eliminarTurno(t['id'].toString(), t['nombre_turno']?.toString() ?? '')),
-                      ],
-                    )),
-                  ]);
-                }).toList(),
+      child: _turnosDisponibles.isEmpty
+          ? const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('No hay turnos registrados.', style: TextStyle(color: Colors.grey))))
+          : SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
+                  dataRowMinHeight: 38,
+                  dataRowMaxHeight: 42,
+                  columns: const [
+                    DataColumn(label: Text('NOMBRE DEL TURNO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                    DataColumn(label: Text('HORA ENTRADA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                    DataColumn(label: Text('HORA SALIDA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                    DataColumn(label: Text('TOLERANCIA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                    DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                  ],
+                  rows: _turnosDisponibles.map((t) {
+                    return DataRow(cells: [
+                      DataCell(Text(t['nombre_turno']?.toString() ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                      DataCell(Text(t['hora_entrada']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
+                      DataCell(Text(t['hora_salida']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
+                      DataCell(Text('${t['tolerancia_minutos']} min', style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
+                      DataCell(Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(icon: const Icon(Icons.edit, color: Colors.amber, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _activarEdicionTurno(t)),
+                          const SizedBox(width: 10),
+                          IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _eliminarTurno(t['id'].toString(), t['nombre_turno']?.toString() ?? '')),
+                        ],
+                      )),
+                    ]);
+                  }).toList(),
+                ),
               ),
             ),
-          );
-        },
-      ),
     );
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       drawer: esPantallaMovil ? Drawer(child: _buildSidebarMenu(esDrawer: true)) : null,
