@@ -1077,7 +1077,7 @@ class _AdminPageState extends State<AdminPage> {
 
 
                                           rows: registros.map((r) {
-                        final f = DateTime.parse(r['fecha_hora_servidor']);
+                        final f = DateTime.parse(r['fecha_hora_servidor']).toLocal();
                         final String empleadoId = r['empleado_id']?.toString() ?? '';
                         final String selfieUrlCampo = r['selfie_url']?.toString() ?? 'EMPTY';
                         final String incidenciaDetectada = r['tipo_evento'] ?? 'ENTRADA';
@@ -1100,34 +1100,20 @@ class _AdminPageState extends State<AdminPage> {
                         final String cargoTrabajador = puestoData != null ? (puestoData['nombre'] ?? 'GENERAL') : 'GENERAL';
 
                         // 🧠 EXTRAER LAS HORAS DIRECTAS DEL TURNO EMPAREJADO POR EL RPC DE SUPABASE
-                                               // ✅ CORRECCIÓN DE CAMPOS: Extraer las cadenas de texto directamente desde turnoData
-                                                // 🧠 BUSCADOR DINÁMICO PURO: Inicializa sin ningún horario hardcodeado
-                                               String entradaVisual = '--:--';
+                        // ✅ CORRECCIÓN DE CAMPOS: Extraer las cadenas de texto directamente desde turnoData
+                          // 🧠 BUSCADOR DINÁMICO PURO: Inicializa sin ningún horario hardcodeado
+                        String entradaVisual = '--:--';
                         String salidaVisual = '--:--';
+                        final String? turnoIdRegistro = r['turno_id']?.toString();
 
-                        try {
-                          if (_turnosDisponibles.isNotEmpty) {
-                            if (estatusLeyServidor == 'SOBRETIEMPO' || incidenciaDetectada == 'SALIDA') {
-                              final turnoMatcheado = _turnosDisponibles.reduce((a, b) {
-                                final int horaA = int.parse(a['hora_salida'].toString().split(':')[0]);
-                                final int horaB = int.parse(b['hora_salida'].toString().split(':')[0]);
-                                return (horaA - f.hour).abs() < (horaB - f.hour).abs() ? a : b;
-                              });
-                              entradaVisual = turnoMatcheado['hora_entrada'].toString().substring(0, 5);
-                              salidaVisual = turnoMatcheado['hora_salida'].toString().substring(0, 5);
-                            } else {
-                              final turnoMatcheado = _turnosDisponibles.reduce((a, b) {
-                                final int horaA = int.parse(a['hora_entrada'].toString().split(':')[0]);
-                                final int horaB = int.parse(b['hora_entrada'].toString().split(':')[0]);
-                                return (horaA - f.hour).abs() < (horaB - f.hour).abs() ? a : b;
-                              });
-                              entradaVisual = turnoMatcheado['hora_entrada'].toString().substring(0, 5);
-                              salidaVisual = turnoMatcheado['hora_salida'].toString().substring(0, 5);
-                            }
+                        if (turnoIdRegistro != null && _turnosDisponibles.isNotEmpty) {
+                          final turnoExacto = _turnosDisponibles.where((t) => t['id'].toString() == turnoIdRegistro).firstOrNull;
+                          if (turnoExacto != null) {
+                            entradaVisual = turnoExacto['hora_entrada'].toString().substring(0, 5);
+                            salidaVisual = turnoExacto['hora_salida'].toString().substring(0, 5);
                           }
-                        } catch (eTurno) {
-                          debugPrint("Error analítico en correspondencia dinámica: $eTurno");
                         }
+
 
 
 
