@@ -209,53 +209,109 @@ class _KioscoPageState extends State<KioscoPage> {
       },
     );
   }
-  Widget _buildSeccionVisual() {
+   Widget _buildSeccionVisual({required bool esPantallaChica}) {
+    final double tamanoCamara = esPantallaChica ? 105.0 : 140.0;
     return Container(
-      color: const Color(0xFF0D5C46), width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('VALIDACIÓN VISUAL', style: TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-        const SizedBox(height: 8),
-        Text(_horaDigital, style: const TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2)),
-        const SizedBox(height: 12),
-        Container(width: 150, height: 150, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _cameraController != null ? Colors.tealAccent : Colors.white24, width: 4)), child: ClipOval(child: _estaProcesando || _inicializandoCamara ? const Padding(padding: EdgeInsets.all(45.0), child: CircularProgressIndicator(color: Colors.white)) : (_cameraController != null && _cameraController!.value.isInitialized ? CameraPreview(_cameraController!) : Container(color: const Color(0xFF114232), child: const Icon(Icons.photo_camera_front_outlined, color: Colors.white38, size: 55))))),
-        const SizedBox(height: 10),
-        Text(_cameraController != null ? '📷 Cámara Activa' : '💤 Sensor en reposo.', style: TextStyle(color: _cameraController != null ? Colors.tealAccent : Colors.white60, fontSize: 13, fontStyle: FontStyle.italic))
-      ]),
+      color: const Color(0xFF0D5C46),
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(vertical: esPantallaChica ? 10.0 : 18.0, horizontal: 16.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'VALIDACIÓN VISUAL',
+            style: TextStyle(color: Colors.white70, fontSize: esPantallaChica ? 12 : 14, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+          ),
+          SizedBox(height: esPantallaChica ? 2 : 6),
+          Text(
+            _horaDigital,
+            style: TextStyle(fontSize: esPantallaChica ? 32 : 40, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2),
+          ),
+          SizedBox(height: esPantallaChica ? 6 : 10),
+          Container(
+            width: tamanoCamara,
+            height: tamanoCamara,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: _cameraController != null ? Colors.tealAccent : Colors.white24, width: 3),
+            ),
+            child: ClipOval(
+              child: _estaProcesando || _inicializandoCamara
+                  ? const Padding(padding: EdgeInsets.all(30.0), child: CircularProgressIndicator(color: Colors.white))
+                  : (_cameraController != null && _cameraController!.value.isInitialized
+                      ? CameraPreview(_cameraController!)
+                      : Container(color: const Color(0xFF114232), child: Icon(Icons.photo_camera_front_outlined, color: Colors.white38, size: tamanoCamara * 0.4))),
+            ),
+          ),
+          SizedBox(height: esPantallaChica ? 4 : 8),
+          Text(
+            _cameraController != null ? '📷 Cámara Activa' : '💤 Sensor en reposo.',
+            style: TextStyle(color: _cameraController != null ? Colors.tealAccent : Colors.white60, fontSize: 12, fontStyle: FontStyle.italic),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildTecladoNumerico() {
-    final List<String> botones = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'];
-    return GridView.builder(
-      shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: botones.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 1.5, crossAxisSpacing: 12, mainAxisSpacing: 12),
-      itemBuilder: (context, index) {
-        final boton = botones[index]; final bool esEspecial = boton == 'C' || boton == '⌫';
-        return ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: esEspecial ? Colors.blueGrey : Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.grey))),
-          onPressed: () {
-            if (boton == 'C') { _limpiarPin(); }
-            else if (boton == '⌫') { 
-              if (_pinActual.isNotEmpty) { 
-                setState(() { 
-                  _pinActual = _pinActual.substring(0, _pinActual.length - 1); 
-                  _pinController.text = _pinActual; 
-                }); 
-                if (_pinActual.isEmpty) { _apagarCamara(); } 
-              } 
-            }
-            else { _agregarDigito(boton); }
-          },
-          child: Text(boton, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: esEspecial ? Colors.white : const Color(0xFF2D3748))),
+    final List<List<String>> filas = [
+      ['1', '2', '3'],
+      ['4', '5', '6'],
+      ['7', '8', '9'],
+      ['C', '0', '⌫'],
+    ];
+
+    return Column(
+      children: filas.map((fila) {
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: fila.map((boton) {
+                final bool esEspecial = boton == 'C' || boton == '⌫';
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: esEspecial ? Colors.blueGrey : Colors.white,
+                        elevation: 0,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: Colors.grey)),
+                      ),
+                      onPressed: () {
+                        if (boton == 'C') {
+                          _limpiarPin();
+                        } else if (boton == '⌫') {
+                          if (_pinActual.isNotEmpty) {
+                            setState(() {
+                              _pinActual = _pinActual.substring(0, _pinActual.length - 1);
+                              _pinController.text = _pinActual;
+                            });
+                            if (_pinActual.isEmpty) _apagarCamara();
+                          }
+                        } else {
+                          _agregarDigito(boton);
+                        }
+                      },
+                      child: Text(
+                        boton,
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: esEspecial ? Colors.white : const Color(0xFF2D3748)),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
         );
-      },
+      }).toList(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // 🌟 VALIDACIÓN DE CANDADO CRÍTICA:
-    // El botón solo se activa si el PIN tiene 4 dígitos Y la cámara ya está 100% lista en pantalla
     final bool camaraLista = _cameraController != null && _cameraController!.value.isInitialized;
     final bool sePuedeRegistrar = _pinActual.length == 4 && camaraLista && !_estaProcesando;
 
@@ -264,68 +320,74 @@ class _KioscoPageState extends State<KioscoPage> {
       body: SafeArea(
         child: _estaProcesando
             ? const Center(child: CircularProgressIndicator(color: Colors.teal))
-            : LayoutBuilder(builder: (context, constraints) {
-                return Column(children: [
-                  _buildSeccionVisual(),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(), 
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0), 
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min, 
-                          children: [
-                            // 🌟 CAJA DE TEXTO DEL PIN CON ICONO DE OJO INTERACTIVO
-                            TextField(
-                              controller: _pinController, 
-                              readOnly: true, 
-                              obscureText: _ocultarPin, // Alterna entre asteriscos o números claros
-                              textAlign: TextAlign.center, 
-                              style: TextStyle(fontSize: 28, letterSpacing: _ocultarPin ? 16 : 6, fontWeight: FontWeight.bold), 
-                              decoration: InputDecoration(
-                                hintText: '••••', 
-                                hintStyle: const TextStyle(color: Colors.black26, letterSpacing: 16), 
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), 
-                                filled: true, 
-                                fillColor: Colors.white, 
-                                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                                suffixIcon: IconButton(
-                                  icon: Icon(_ocultarPin ? Icons.visibility_off : Icons.visibility, color: Colors.blueGrey),
-                                  onPressed: () => setState(() => _ocultarPin = !_ocultarPin),
-                                ),
-                              ),
-                            ), 
-                            const SizedBox(height: 16), 
-                            _buildTecladoNumerico(),
-                            const SizedBox(height: 20),
-                            
-                            // 🌟 NUEVO BOTÓN CORPORATIVO AUTOMATIZADO CON VALIDACIÓN DE HARDWARE
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.teal.shade700,
-                                  disabledBackgroundColor: Colors.grey.shade300,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  elevation: sePuedeRegistrar ? 2 : 0,
-                                ),
-                                icon: Icon(Icons.fingerprint, color: sePuedeRegistrar ? Colors.white : Colors.grey),
-                                label: Text(
-                                  camaraLista ? 'REGISTRAR ASISTENCIA' : '⚡ ESPERANDO SENSOR CÁMARA...',
-                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: sePuedeRegistrar ? Colors.white : Colors.grey.shade500),
-                                ),
-                                onPressed: sePuedeRegistrar ? _procesarMarcajeAsistencia : null,
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final bool esPantallaChica = constraints.maxHeight < 720;
+
+                  return Column(
+                    children: [
+                      _buildSeccionVisual(esPantallaChica: esPantallaChica),
+                      Expanded(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 480),
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: esPantallaChica ? 10.0 : 16.0),
+                              child: Column(
+                                children: [
+                                  TextField(
+                                    controller: _pinController,
+                                    readOnly: true,
+                                    obscureText: _ocultarPin,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: esPantallaChica ? 24 : 28, letterSpacing: _ocultarPin ? 16 : 6, fontWeight: FontWeight.bold),
+                                    decoration: InputDecoration(
+                                      hintText: '••••',
+                                      hintStyle: const TextStyle(color: Colors.black26, letterSpacing: 16),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(vertical: esPantallaChica ? 8 : 12),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(_ocultarPin ? Icons.visibility_off : Icons.visibility, color: Colors.blueGrey),
+                                        onPressed: () => setState(() => _ocultarPin = !_ocultarPin),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: esPantallaChica ? 8 : 14),
+                                  Expanded(child: _buildTecladoNumerico()),
+                                  const SizedBox(height: 4),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.teal.shade700,
+                                        disabledBackgroundColor: Colors.grey.shade300,
+                                        padding: EdgeInsets.symmetric(vertical: esPantallaChica ? 13 : 16),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        elevation: sePuedeRegistrar ? 2 : 0,
+                                      ),
+                                      icon: Icon(Icons.fingerprint, color: sePuedeRegistrar ? Colors.white : Colors.grey),
+                                      label: Text(
+                                        camaraLista ? 'REGISTRAR ASISTENCIA' : '⚡ ESPERANDO SENSOR CÁMARA...',
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: sePuedeRegistrar ? Colors.white : Colors.grey.shade500),
+                                      ),
+                                      onPressed: sePuedeRegistrar ? _procesarMarcajeAsistencia : null,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                  )
-                ]);
-              }),
+                    ],
+                  );
+                },
+              ),
       ),
     );
   }
+
 }
