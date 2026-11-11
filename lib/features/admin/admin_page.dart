@@ -689,7 +689,7 @@ class _AdminPageState extends State<AdminPage> {
     });
   }
 
-   Widget _buildSidebarMenu() {
+     Widget _buildSidebarMenu({bool esDrawer = false}) {
     return Container(
       width: 240,
       color: const Color(0xFF1E293B), 
@@ -707,11 +707,10 @@ class _AdminPageState extends State<AdminPage> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildItemSidebar(id: 'INICIO', titulo: 'Inicio / Dashboard', icono: Icons.dashboard),
-          _buildItemSidebar(id: 'REGISTRO', titulo: 'Registro de Personal', icono: Icons.person_add_alt_1),
-          _buildItemSidebar(id: 'MONITOREO', titulo: 'Monitoreo Asistencias', icono: Icons.playlist_add_check_circle),
-          // 🌟 NUEVO BOTÓN LATERAL: Módulo de Receta de Turnos
-          _buildItemSidebar(id: 'TURNOS', titulo: 'Configuración de Turnos', icono: Icons.more_time_rounded),
+          _buildItemSidebar(id: 'INICIO', titulo: 'Inicio / Dashboard', icono: Icons.dashboard, cerrarDrawer: esDrawer),
+          _buildItemSidebar(id: 'REGISTRO', titulo: 'Registro de Personal', icono: Icons.person_add_alt_1, cerrarDrawer: esDrawer),
+          _buildItemSidebar(id: 'MONITOREO', titulo: 'Monitoreo Asistencias', icono: Icons.playlist_add_check_circle, cerrarDrawer: esDrawer),
+          _buildItemSidebar(id: 'TURNOS', titulo: 'Configuración de Turnos', icono: Icons.more_time_rounded, cerrarDrawer: esDrawer),
           const Spacer(),
           const Padding(padding: EdgeInsets.all(16.0), child: Text('v2.4.0 - Buscador & Ingreso', style: TextStyle(color: Colors.white30, fontSize: 11)))
         ],
@@ -720,12 +719,18 @@ class _AdminPageState extends State<AdminPage> {
   }
 
 
-  Widget _buildItemSidebar({required String id, required String titulo, required IconData icono}) {
+
+   Widget _buildItemSidebar({required String id, required String titulo, required IconData icono, bool cerrarDrawer = false}) {
     final bool esActivo = _seccionActivaSidebar == id;
     return Material(
       color: Colors.transparent,
       child: ListTile(
-        onTap: () => setState(() => _seccionActivaSidebar = id),
+        onTap: () {
+          setState(() => _seccionActivaSidebar = id);
+          if (cerrarDrawer && Navigator.canPop(context)) {
+            Navigator.pop(context);
+          }
+        },
         leading: Icon(icono, color: esActivo ? Colors.tealAccent : Colors.white60, size: 20),
         title: Text(titulo, style: TextStyle(color: esActivo ? Colors.white : Colors.white70, fontWeight: esActivo ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
         selected: esActivo,
@@ -733,6 +738,7 @@ class _AdminPageState extends State<AdminPage> {
       ),
     );
   }
+
   Widget _buildTablaEmpleadosExcel() {
     final String busqueda = _buscarExcelController.text.trim().toLowerCase();
     
@@ -950,97 +956,59 @@ class _AdminPageState extends State<AdminPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 🔍 BARRA DE FILTRADO SUPERIOR COMPACTA OPTIMIZADA PARA WEB
-        Container(
-          padding: const EdgeInsets.all(10),
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xffe2e8f0)),
-          ),
-          child: Row(
-            children: [
-              // Filtro por Nombre o Nómina
-              Expanded(
-                flex: 3,
-                child: TextFormField(
-                  controller: _buscarExcelController,
-                  onChanged: (value) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: '🔍 Buscar por Nombre o Nómina de empleado...',
-                    hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
-                    prefixIcon: const Icon(Icons.search, size: 16, color: Colors.grey),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    filled: true,
-                    fillColor: Colors.grey.shade50,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Selector de Fecha Inicial Seguro para Escritorio
-              Expanded(
-                flex: 2,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: Color(0xffcbd5e1)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  ),
-                  icon: const Icon(Icons.calendar_today, size: 14, color: Colors.blueGrey),
-                  label: Text(
-                    'Inicio: ${_rangoFechas.start.day}/${_rangoFechas.start.month}/${_rangoFechas.start.year}',
-                    style: const TextStyle(fontSize: 12, color: Colors.black87),
-                  ),
-                  onPressed: () async {
-                    final DateTime? fInicio = await showDatePicker(
-                      context: context,
-                      initialDate: _rangoFechas.start,
-                      firstDate: DateTime(2020),
-                      lastDate: _rangoFechas.end,
-                    );
-                    if (fInicio != null) {
-                      setState(() {
-                        _rangoFechas = DateTimeRange(start: fInicio, end: _rangoFechas.end);
-                      });
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Selector de Fecha Final Seguro para Escritorio
-              Expanded(
-                flex: 2,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: Color(0xffcbd5e1)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  ),
-                  icon: const Icon(Icons.calendar_today, size: 14, color: Colors.blueGrey),
-                  label: Text(
-                    'Fin: ${_rangoFechas.end.day}/${_rangoFechas.end.month}/${_rangoFechas.end.year}',
-                    style: const TextStyle(fontSize: 12, color: Colors.black87),
-                  ),
-                  onPressed: () async {
-                    final DateTime? fFin = await showDatePicker(
-                      context: context,
-                      initialDate: _rangoFechas.end,
-                      firstDate: _rangoFechas.start,
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (fFin != null) {
-                      setState(() {
-                        _rangoFechas = DateTimeRange(start: _rangoFechas.start, end: fFin);
-                      });
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
+               // 🔍 BARRA DE FILTRADO SUPERIOR ADAPTABLE (ESCRITORIO Y MÓVIL)
+        LayoutBuilder(builder: (context, constraints) {
+          final bool esAngosto = constraints.maxWidth < 650;
+          final campoBusqueda = TextFormField(
+            controller: _buscarExcelController,
+            onChanged: (value) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: '🔍 Buscar por Nombre o Nómina...',
+              hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
+              prefixIcon: const Icon(Icons.search, size: 16, color: Colors.grey),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              filled: true,
+              fillColor: Colors.grey.shade50,
+            ),
+          );
+          final btnInicio = OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              side: const BorderSide(color: Color(0xffcbd5e1)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+            icon: const Icon(Icons.calendar_today, size: 14, color: Colors.blueGrey),
+            label: Text('Inicio: ${_rangoFechas.start.day}/${_rangoFechas.start.month}/${_rangoFechas.start.year}', style: const TextStyle(fontSize: 11, color: Colors.black87)),
+            onPressed: () async {
+              final DateTime? fInicio = await showDatePicker(context: context, initialDate: _rangoFechas.start, firstDate: DateTime(2020), lastDate: _rangoFechas.end);
+              if (fInicio != null) setState(() => _rangoFechas = DateTimeRange(start: fInicio, end: _rangoFechas.end));
+            },
+          );
+          final btnFin = OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              side: const BorderSide(color: Color(0xffcbd5e1)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+            icon: const Icon(Icons.calendar_today, size: 14, color: Colors.blueGrey),
+            label: Text('Fin: ${_rangoFechas.end.day}/${_rangoFechas.end.month}/${_rangoFechas.end.year}', style: const TextStyle(fontSize: 11, color: Colors.black87)),
+            onPressed: () async {
+              final DateTime? fFin = await showDatePicker(context: context, initialDate: _rangoFechas.end, firstDate: _rangoFechas.start, lastDate: DateTime.now().add(const Duration(days: 365)));
+              if (fFin != null) setState(() => _rangoFechas = DateTimeRange(start: _rangoFechas.start, end: fFin));
+            },
+          );
+
+          return Container(
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xffe2e8f0))),
+            child: esAngosto
+                ? Column(children: [campoBusqueda, const SizedBox(height: 8), Row(children: [Expanded(child: btnInicio), const SizedBox(width: 8), Expanded(child: btnFin)])])
+                : Row(children: [Expanded(flex: 3, child: campoBusqueda), const SizedBox(width: 12), Expanded(flex: 2, child: btnInicio), const SizedBox(width: 8), Expanded(flex: 2, child: btnFin)]),
+          );
+        }),
+
         const Text(
           'MONITOREO DE ASISTENCIAS EN TIEMPO REAL - VISTA CORPORATIVA', 
           style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 0.5)
@@ -1447,158 +1415,197 @@ class _AdminPageState extends State<AdminPage> {
 
 
 
-  Widget _buildCardMetrica(String titulo, String valor, IconData icono, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildCardMetrica(String titulo, String valor, IconData icono, Color color, {bool compacto = false}) {
+    return Container(
+      padding: EdgeInsets.all(compacto ? 10 : 16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titulo, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: compacto ? 9 : 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)),
+                const SizedBox(height: 4),
+                Text(valor, style: TextStyle(fontSize: compacto ? 18 : 22, fontWeight: FontWeight.bold, color: const Color(0xFF2D3748))),
+              ],
+            ),
+          ),
+          Icon(icono, size: compacto ? 22 : 28, color: color),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool esPantallaMovil = MediaQuery.of(context).size.width < 850;
+
+    final formularioTurnoWidget = Container(
+      width: esPantallaMovil ? double.infinity : 320,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(titulo, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)), const SizedBox(height: 4), Text(valor, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)))]),
-            Icon(icono, size: 28, color: color),
+            const Row(children: [Icon(Icons.more_time, color: Colors.teal, size: 20), SizedBox(width: 8), Text('PROGRAMACIÓN DE TURNOS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey))]),
+            const Divider(height: 20),
+            const Text('Nombre del Turno:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            const SizedBox(height: 6),
+            TextFormField(controller: _nombreTurnoController, textCapitalization: TextCapitalization.characters, decoration: InputDecoration(hintText: 'Ej: PRIMER TURNO', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
+            const SizedBox(height: 12),
+            const Text('Hora de Entrada (24 hrs):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            const SizedBox(height: 6),
+            TextFormField(controller: _horaEntradaController, decoration: InputDecoration(hintText: 'Ej: 06:00', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
+            const SizedBox(height: 12),
+            const Text('Hora de Salida (24 hrs):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            const SizedBox(height: 6),
+            TextFormField(controller: _horaSalidaController, decoration: InputDecoration(hintText: 'Ej: 14:00', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
+            const SizedBox(height: 12),
+            const Text('Tolerancia (Minutos):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            const SizedBox(height: 6),
+            TextFormField(controller: _toleranciaController, keyboardType: TextInputType.number, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: _turnoIdEdicion == null ? Colors.teal : Colors.amber.shade800, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                onPressed: _registrarNuevoTurno,
+                icon: Icon(_turnoIdEdicion == null ? Icons.save : Icons.edit, color: Colors.white, size: 16),
+                label: Text(_turnoIdEdicion == null ? 'Guardar Turno en Receta' : 'Actualizar Turno', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            if (_turnoIdEdicion != null)
+              Center(child: TextButton(onPressed: _cancelarEdicionTurno, child: const Text('Cancelar Edición', style: TextStyle(color: Colors.red)))),
           ],
         ),
       ),
     );
-  }
-  @override
-  Widget build(BuildContext context) {
+
+    final tablaTurnosWidget = Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
+      child: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: SupabaseService.client.from('turnos').stream(primaryKey: ['id']).order('nombre_turno'),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: CircularProgressIndicator(color: Colors.teal)));
+          final tLista = snapshot.data!;
+          return SingleChildScrollView(
+            scrollDirection: Axis.vertical,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
+                dataRowMinHeight: 38,
+                dataRowMaxHeight: 42,
+                columns: const [
+                  DataColumn(label: Text('NOMBRE DEL TURNO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                  DataColumn(label: Text('HORA ENTRADA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                  DataColumn(label: Text('HORA SALIDA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                  DataColumn(label: Text('TOLERANCIA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                  DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                ],
+                rows: tLista.map((t) {
+                  return DataRow(cells: [
+                    DataCell(Text(t['nombre_turnos']?.toString() ?? t['nombre_turno']?.toString() ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                    DataCell(Text(t['hora_entrada']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
+                    DataCell(Text(t['hora_salida']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
+                    DataCell(Text('${t['tolerancia_minutos']} min', style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
+                    DataCell(Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(icon: const Icon(Icons.edit, color: Colors.amber, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _activarEdicionTurno(t)),
+                        const SizedBox(width: 10),
+                        IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _eliminarTurno(t['id'].toString(), t['nombre_turno']?.toString() ?? '')),
+                      ],
+                    )),
+                  ]);
+                }).toList(),
+              ),
+            ),
+          );
+        },
+      ),
+    );
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      drawer: esPantallaMovil ? Drawer(child: _buildSidebarMenu(esDrawer: true)) : null,
       appBar: AppBar(
         backgroundColor: Colors.teal,
-        title: const Row(children: [Text('ADMINISTRACIÓN CENTRAL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)), SizedBox(width: 12), RelojDigitalIndependiente()]),
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                esPantallaMovil ? 'ADMIN CENTRAL' : 'ADMINISTRACIÓN CENTRAL',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const RelojDigitalIndependiente(),
+          ],
+        ),
         actions: [
-           IconButton(icon: const Icon(Icons.print, color: Colors.white), onPressed: _imprimirPDF), const SizedBox(width: 10)],
+          IconButton(icon: const Icon(Icons.print, color: Colors.white), onPressed: _imprimirPDF),
+          const SizedBox(width: 6),
+        ],
       ),
       body: Row(
         children: [
-          _buildSidebarMenu(), 
+          if (!esPantallaMovil) _buildSidebarMenu(),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: EdgeInsets.all(esPantallaMovil ? 10.0 : 16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [_buildCardMetrica('PRESENTES', '0', Icons.people, Colors.green), const SizedBox(width: 10), _buildCardMetrica('RETARDOS', '0', Icons.timer, Colors.amber), const SizedBox(width: 10), _buildCardMetrica('AUSENTES', '0', Icons.person_off, Colors.red)]),
-                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(child: _buildCardMetrica('PRESENTES', '0', Icons.people, Colors.green, compacto: esPantallaMovil)),
+                      SizedBox(width: esPantallaMovil ? 6 : 10),
+                      Expanded(child: _buildCardMetrica('RETARDOS', '0', Icons.timer, Colors.amber, compacto: esPantallaMovil)),
+                      SizedBox(width: esPantallaMovil ? 6 : 10),
+                      Expanded(child: _buildCardMetrica('AUSENTES', '0', Icons.person_off, Colors.red, compacto: esPantallaMovil)),
+                    ],
+                  ),
+                  SizedBox(height: esPantallaMovil ? 10 : 16),
                   Expanded(
-                    child: LayoutBuilder(builder: (context, constraints) {
-                      final bool esMovil = constraints.maxWidth < 750;
-                                     if (_seccionActivaSidebar == 'INICIO') {
-                  return Container(
-                    width: double.infinity, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
-                    child: const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.dashboard_customize, size: 65, color: Colors.teal), SizedBox(height: 16), Text('¡Bienvenido al Panel de Control de Asistencia!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)), SizedBox(height: 6), Text('Selecciona una opción del menú de la izquierda para comenzar.', style: TextStyle(fontSize: 13, color: Colors.grey))])),
-                  );
-                } else if (_seccionActivaSidebar == 'REGISTRO') {
-                  return esMovil
-                      ? SingleChildScrollView(child: Column(children: [SizedBox(height: 600, child: _buildFormularioAltaPersonal()), const SizedBox(height: 20), SizedBox(height: 400, child: _buildTablaEmpleadosExcel())]))
-                      : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 320, child: _buildFormularioAltaPersonal()), const SizedBox(width: 16), Expanded(child: _buildTablaEmpleadosExcel())]);
-                } else if (_seccionActivaSidebar == 'MONITOREO') {
-                  return _buildSeccionFeedMonitoreo();
-                } else {
-                  // 🌟 INTERFAZ COMPLETA DE TURNOS: FORMULARIO Y HOJA DE CÁLCULO DERECHA REACTIVA
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 320,
-                          padding: const EdgeInsets.all(16),
+                    child: Builder(builder: (context) {
+                      if (_seccionActivaSidebar == 'INICIO') {
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
-                          child: SingleChildScrollView(
+                          child: Center(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Row(children: [Icon(Icons.more_time, color: Colors.teal, size: 20), SizedBox(width: 8), Text('PROGRAMACIÓN DE TURNOS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey))]),
-                                const Divider(height: 20),
-                                const Text('Nombre del Turno:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                const Icon(Icons.dashboard_customize, size: 60, color: Colors.teal),
+                                const SizedBox(height: 16),
+                                const Text('¡Bienvenido al Panel de Control de Asistencia!', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
                                 const SizedBox(height: 6),
-                                TextFormField(controller: _nombreTurnoController, textCapitalization: TextCapitalization.characters, decoration: InputDecoration(hintText: 'Ej: PRIMER TURNO', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
-                                const SizedBox(height: 12),
-                                const Text('Hora de Entrada (24 hrs):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                const SizedBox(height: 6),
-                                TextFormField(controller: _horaEntradaController, decoration: InputDecoration(hintText: 'Ej: 06:00', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
-                                const SizedBox(height: 12),
-                                const Text('Hora de Salida (24 hrs):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                const SizedBox(height: 6),
-                                TextFormField(controller: _horaSalidaController, decoration: InputDecoration(hintText: 'Ej: 14:00', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
-                                const SizedBox(height: 12),
-                                const Text('Tolerancia (Minutos):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                const SizedBox(height: 6),
-                                TextFormField(controller: _toleranciaController, keyboardType: TextInputType.number, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
-                                const SizedBox(height: 20),
-                                 SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(backgroundColor: _turnoIdEdicion == null ? Colors.teal : Colors.amber.shade800, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                                    onPressed: _registrarNuevoTurno,
-                                    icon: Icon(_turnoIdEdicion == null ? Icons.save : Icons.edit, color: Colors.white, size: 16),
-                                    label: Text(_turnoIdEdicion == null ? 'Guardar Turno en Receta' : 'Actualizar Turno', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                  ),
+                                Text(
+                                  esPantallaMovil ? 'Abre el menú superior izquierdo (☰) para navegar.' : 'Selecciona una opción del menú de la izquierda para comenzar.',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 13, color: Colors.grey),
                                 ),
-                                if (_turnoIdEdicion != null)
-                                  Center(child: TextButton(onPressed: _cancelarEdicionTurno, child: const Text('Cancelar Edición', style: TextStyle(color: Colors.red)))),
-
                               ],
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
-                            child: StreamBuilder<List<Map<String, dynamic>>>(
-                              stream: SupabaseService.client.from('turnos').stream(primaryKey: ['id']).order('nombre_turno'),
-                              builder: (context, snapshot) {
-                                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.teal));
-                                final tLista = snapshot.data!;
-                                return SingleChildScrollView(
-                                  scrollDirection: Axis.vertical,
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: DataTable(
-                                      headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
-                                      dataRowMinHeight: 38, dataRowMaxHeight: 42,
-                                      columns: const [
-                                        DataColumn(label: Text('NOMBRE DEL TURNO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                                        DataColumn(label: Text('HORA ENTRADA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                                        DataColumn(label: Text('HORA SALIDA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                                        DataColumn(label: Text('TOLERANCIA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                                        DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-
-                                      ],
-                                      rows: tLista.map((t) {
-                                        return DataRow(cells: [
-                                          DataCell(Text(t['nombre_turnos']?.toString() ?? t['nombre_turno']?.toString() ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-                                          DataCell(Text(t['hora_entrada']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
-                                          DataCell(Text(t['hora_salida']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
-                                          DataCell(Text('${t['tolerancia_minutos']} min', style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
-                                          DataCell(Row(
-  mainAxisSize: MainAxisSize.min,
-  children: [
-    IconButton(icon: const Icon(Icons.edit, color: Colors.amber, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _activarEdicionTurno(t)),
-    const SizedBox(width: 10),
-    IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _eliminarTurno(t['id'].toString(), t['nombre_turno']?.toString() ?? '')),
-  ],
-)),
-
-                                        ]);
-                                      }).toList(),
-                                    ),
-                                  ),
-                                );
-                              }
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
+                        );
+                      } else if (_seccionActivaSidebar == 'REGISTRO') {
+                        return esPantallaMovil
+                            ? SingleChildScrollView(child: Column(children: [_buildFormularioAltaPersonal(), const SizedBox(height: 16), SizedBox(height: 420, child: _buildTablaEmpleadosExcel())]))
+                            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 320, child: _buildFormularioAltaPersonal()), const SizedBox(width: 16), Expanded(child: _buildTablaEmpleadosExcel())]);
+                      } else if (_seccionActivaSidebar == 'MONITOREO') {
+                        return _buildSeccionFeedMonitoreo();
+                      } else {
+                        return esPantallaMovil
+                            ? SingleChildScrollView(child: Column(children: [formularioTurnoWidget, const SizedBox(height: 16), SizedBox(height: 360, child: tablaTurnosWidget)]))
+                            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [formularioTurnoWidget, const SizedBox(width: 16), Expanded(child: tablaTurnosWidget)]);
+                      }
                     }),
                   ),
                 ],
@@ -1609,6 +1616,7 @@ class _AdminPageState extends State<AdminPage> {
       ),
     );
   }
+
 
      // ✅ ENFOQUE GMAIL WEB: Abre directamente la pestaña de redacción de Google con datos precargados
   void _enviarCorreoBrevo({
