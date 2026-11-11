@@ -1449,6 +1449,164 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  Widget _buildDashboardKpis(List<Map<String, dynamic>> todosLosRegistros, bool esMovil) {
+    final ahora = DateTime.now();
+    final hoyInicio = DateTime(ahora.year, ahora.month, ahora.day);
+    final hace7Dias = hoyInicio.subtract(const Duration(days: 7));
+
+    final registrosHoy = todosLosRegistros.where((r) {
+      final f = DateTime.parse(r['fecha_hora_servidor']).toLocal();
+      return f.isAfter(hoyInicio);
+    }).toList();
+
+    final registrosSemana = todosLosRegistros.where((r) {
+      final f = DateTime.parse(r['fecha_hora_servidor']).toLocal();
+      return f.isAfter(hace7Dias);
+    }).toList();
+
+    // 1. Puntualidad semanal
+    final entradasSemana = registrosSemana.where((r) => r['tipo_evento'] == 'ENTRADA').toList();
+    final aTiempoSemana = entradasSemana.where((r) => r['estatus_asistencia'] == 'ASISTENCIA').length;
+    final double tasaPuntualidad = entradasSemana.isEmpty ? 100.0 : (aTiempoSemana / entradasSemana.length) * 100;
+
+    // 2. Minutos extra acumulados en la semana
+    int minutosExtraSemana = 0;
+    for (final r in registrosSemana.where((r) => r['estatus_asistencia'] == 'SOBRETIEMPO')) {
+      final turno = _turnosDisponibles.where((t) => t['id'].toString() == r['turno_id']?.toString()).firstOrNull;
+      if (turno != null) {
+        final f = DateTime.parse(r['fecha_hora_servidor']).toLocal();
+        final partes = turno['hora_salida'].toString().split(':');
+        final minRef = int.parse(partes[0]) * 60 + int.parse(partes[1]);
+        int diff = (f.hour * 60 + f.minute) - minRef;
+        if (diff < -720) diff += 1440;
+        if (diff > 720) diff -= 1440;
+        if (diff > 0) minutosExtraSemana += diff;
+      }
+    }
+
+    // 3. Top empleados con más retardos/faltas en la semana
+    final Map<String, int> conteoIncidencias = {};
+    for (final r in entradasSemana) {
+      if (r['estatus_asistencia'] == 'RETARDO' || r['estatus_asistencia'] == 'FALTA') {
+        final empId = r['empleado_id']?.toString() ?? '';
+        conteoIncidencias[empId] = (conteoIncidencias[empId] ?? 0) + 1;
+      }
+    }
+    final topIncidencias = conteoIncidencias.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+
+    final cardRendimiento = Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [Icon(Icons.insights, color: Colors.teal, size: 18), SizedBox(width: 8), Text('RENDIMIENTO SEMANAL (ÚLTIMOS 7 DÍAS)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey))]),
+          const Divider(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Tasa de Puntualidad:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              Text('${tasaPuntualidad.toStringAsFixed(1)}%', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: tasaPuntualidad >= 85 ? Colors.green.shade700 : Colors.amber.shade800)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: tasaPuntualidad / 100,
+            minHeight: 8,
+            borderRadius: BorderRadius.circular(6),
+            backgroundColor: Colors.grey.shade200,
+            color: tasaPuntualidad >= 85 ? Colors.teal : Colors.amber.shade700,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Tiempo Extra Acumulado:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              Text('+$minutosExtraSemana min', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.purple.shade700)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text('Plantilla activa registrada: ${_empleadosRegistrados.length} trabajadores', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+      ),
+    );
+
+    final cardTurnosHoy = Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [Icon(Icons.schedule, color: Colors.indigo, size: 18), SizedBox(width: 8), Text('ACTIVIDAD POR TURNO (HOY)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey))]),
+          const Divider(height: 20),
+          if (_turnosDisponibles.isEmpty)
+            const Text('No hay turnos configurados.', style: TextStyle(fontSize: 12, color: Colors.grey))
+          else
+            ..._turnosDisponibles.map((t) {
+              final cant = registrosHoy.where((r) => r['turno_id']?.toString() == t['id'].toString() && r['tipo_evento'] == 'ENTRADA').length;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(child: Text('${t['nombre_turno']} (${t['hora_entrada'].toString().substring(0, 5)} - ${t['hora_salida'].toString().substring(0, 5)})', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(color: cant > 0 ? Colors.teal.shade50 : Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
+                      child: Text('$cant entradas', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: cant > 0 ? Colors.teal.shade800 : Colors.grey)),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+
+    final cardAlertas = Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 18), SizedBox(width: 8), Text('TOP INCIDENCIAS DE PUNTUALIDAD (7 DÍAS)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey))]),
+          const Divider(height: 20),
+          if (topIncidencias.isEmpty)
+            const Text('🎉 ¡Excelente! Sin retardos ni faltas en los últimos 7 días.', style: TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.w500))
+          else
+            ...topIncidencias.take(5).map((entry) {
+              final emp = _empleadosRegistrados.where((e) => e['id'].toString() == entry.key).firstOrNull;
+              final nombre = emp != null ? (emp['nombre_completo'] ?? 'Desconocido') : 'Empleado';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(nombre, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                    Text('${entry.value} incidencia(s)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red.shade700)),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          if (esMovil) ...[
+            cardRendimiento,
+            const SizedBox(height: 12),
+            cardTurnosHoy,
+          ] else
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: cardRendimiento), const SizedBox(width: 16), Expanded(child: cardTurnosHoy)]),
+          const SizedBox(height: 16),
+          cardAlertas,
+        ],
+      ),
+    );
+  }
 
 
   Widget _buildCardMetrica(String titulo, String valor, IconData icono, Color color, {bool compacto = false}) {
@@ -1660,6 +1818,67 @@ class _AdminPageState extends State<AdminPage> {
       body: Row(
         children: [
           if (!esPantallaMovil) _buildSidebarMenu(),
+
+
+                    Expanded(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: SupabaseService.client.from('registros_asistencia').stream(primaryKey: ['id']).order('fecha_hora_servidor', ascending: false),
+              builder: (context, snapshotKpi) {
+                final todosRegistros = snapshotKpi.data ?? [];
+                final ahora = DateTime.now();
+                final hoyInicio = DateTime(ahora.year, ahora.month, ahora.day);
+
+                final registrosHoy = todosRegistros.where((r) {
+                  final f = DateTime.parse(r['fecha_hora_servidor']).toLocal();
+                  return f.isAfter(hoyInicio);
+                }).toList();
+
+                final presentesIds = registrosHoy.where((r) => r['tipo_evento'] == 'ENTRADA').map((r) => r['empleado_id'].toString()).toSet();
+                final int presentesHoy = presentesIds.length;
+                final int retardosHoy = registrosHoy.where((r) => r['tipo_evento'] == 'ENTRADA' && (r['estatus_asistencia'] == 'RETARDO' || r['estatus_asistencia'] == 'FALTA')).length;
+                final int ausentesHoy = (_empleadosRegistrados.length - presentesHoy).clamp(0, 9999);
+
+                return Padding(
+                  padding: EdgeInsets.all(esPantallaMovil ? 10.0 : 16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: _buildCardMetrica('PRESENTES HOY', '$presentesHoy', Icons.people, Colors.green, compacto: esPantallaMovil)),
+                          SizedBox(width: esPantallaMovil ? 6 : 10),
+                          Expanded(child: _buildCardMetrica('RETARDOS HOY', '$retardosHoy', Icons.timer, Colors.amber, compacto: esPantallaMovil)),
+                          SizedBox(width: esPantallaMovil ? 6 : 10),
+                          Expanded(child: _buildCardMetrica('AUSENTES HOY', '$ausentesHoy', Icons.person_off, Colors.red, compacto: esPantallaMovil)),
+                        ],
+                      ),
+                      SizedBox(height: esPantallaMovil ? 10 : 16),
+                      Expanded(
+                        child: Builder(builder: (context) {
+                          if (_seccionActivaSidebar == 'INICIO') {
+                            return _buildDashboardKpis(todosRegistros, esPantallaMovil);
+                          } else if (_seccionActivaSidebar == 'REGISTRO') {
+                            return esPantallaMovil
+                                ? SingleChildScrollView(child: Column(children: [_buildFormularioAltaPersonal(), const SizedBox(height: 16), SizedBox(height: 420, child: _buildTablaEmpleadosExcel())]))
+                                : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 320, child: _buildFormularioAltaPersonal()), const SizedBox(width: 16), Expanded(child: _buildTablaEmpleadosExcel())]);
+                          } else if (_seccionActivaSidebar == 'MONITOREO') {
+                            return _buildSeccionFeedMonitoreo();
+                          } else {
+                            return esPantallaMovil
+                                ? SingleChildScrollView(child: Column(children: [formularioTurnoWidget, const SizedBox(height: 16), SizedBox(height: 360, child: tablaTurnosWidget)]))
+                                : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [formularioTurnoWidget, const SizedBox(width: 16), Expanded(child: tablaTurnosWidget)]);
+                          }
+                        }),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+
+
           Expanded(
             child: Padding(
               padding: EdgeInsets.all(esPantallaMovil ? 10.0 : 16.0),
