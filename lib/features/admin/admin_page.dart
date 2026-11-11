@@ -108,6 +108,8 @@ class _AdminPageState extends State<AdminPage> {
 
   String _seccionActivaSidebar = 'INICIO';
   String? _empleadoIdEdicion;
+  String? _turnoIdEdicion;
+
   DateTime? _fechaIngresoSeleccionada; 
 
   @override
@@ -524,7 +526,7 @@ class _AdminPageState extends State<AdminPage> {
 
 
   // 🌟 COPIA Y PEGA ESTE BLOQUE AQUÍ EN ESTE ESPACIO EN BLANCO:
-  Future<void> _registrarNuevoTurno() async {
+    Future<void> _registrarNuevoTurno() async {
     final String nombre = _nombreTurnoController.text.trim();
     final String entrada = _horaEntradaController.text.trim();
     final String salida = _horaSalidaController.text.trim();
@@ -540,33 +542,73 @@ class _AdminPageState extends State<AdminPage> {
     setState(() => _cargandoDatos = true);
 
     try {
-      await SupabaseService.client.from('turnos').insert({
+      final datosTurno = {
         'nombre_turno': nombre.toUpperCase(),
         'hora_entrada': entrada.contains(':') && entrada.split(':').length == 2 ? '$entrada:00' : entrada,
         'hora_salida': salida.contains(':') && salida.split(':').length == 2 ? '$salida:00' : salida,
         'tolerancia_minutos': tolerancia,
-      });
+      };
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Turno guardado con éxito en la Receta Global.'), backgroundColor: Colors.green),
-      );
+      if (_turnoIdEdicion == null) {
+        await SupabaseService.client.from('turnos').insert(datosTurno);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Turno guardado con éxito.'), backgroundColor: Colors.green));
+      } else {
+        await SupabaseService.client.from('turnos').update(datosTurno).eq('id', _turnoIdEdicion!);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✏️ Turno actualizado con éxito.'), backgroundColor: Colors.amber));
+      }
 
+      _cancelarEdicionTurno();
+      await _cargarEstructuraCorporativa();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al guardar el turno: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _cargandoDatos = false);
+    }
+  }
+
+  void _activarEdicionTurno(Map<String, dynamic> t) {
+    setState(() {
+      _turnoIdEdicion = t['id'].toString();
+      _nombreTurnoController.text = t['nombre_turno']?.toString() ?? '';
+      _horaEntradaController.text = t['hora_entrada']?.toString().substring(0, 5) ?? '';
+      _horaSalidaController.text = t['hora_salida']?.toString().substring(0, 5) ?? '';
+      _toleranciaController.text = t['tolerancia_minutos']?.toString() ?? '15';
+    });
+  }
+
+  void _cancelarEdicionTurno() {
+    setState(() {
+      _turnoIdEdicion = null;
       _nombreTurnoController.clear();
       _horaEntradaController.clear();
       _horaSalidaController.clear();
       _toleranciaController.text = '15';
-      
-      _cargarEstructuraCorporativa();
+    });
+  }
+
+  Future<void> _eliminarTurno(String id, String nombre) async {
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('⚠️ ¿Eliminar Turno?', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+        content: Text('¿Seguro que deseas eliminar el turno "$nombre"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar', style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    try {
+      await SupabaseService.client.from('turnos').delete().eq('id', id);
+      if (_turnoIdEdicion == id) _cancelarEdicionTurno();
+      await _cargarEstructuraCorporativa();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🗑️ Turno eliminado.'), backgroundColor: Colors.red));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar el turno: $e'), backgroundColor: Colors.red),
-        );
-      }
-      setState(() => _cargandoDatos = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
   }
+
 
 
   // 🌟 Aquí abajo continúa tu función existente (Línea 395 aprox):
@@ -1074,6 +1116,7 @@ class _AdminPageState extends State<AdminPage> {
                         DataColumn(label: Text('ESTATUS LEY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                       ],
+                      
 
 
                                           rows: registros.map((r) {
@@ -1192,7 +1235,28 @@ class _AdminPageState extends State<AdminPage> {
                           DataCell(Text('$entradaVisual - $salidaVisual', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87))),
                           
                           // 8. ✅ MINUTOS INFORMATIVOS SEGÚN EL CASO REAL
-                          DataCell(Text(estatusLeyServidor == 'RETARDO' ? 'Con Retardo' : (estatusLeyServidor == 'SOBRETIEMPO' ? 'Tiempo Extra' : '0 min'), style: TextStyle(fontSize: 13, fontWeight: estatusLeyServidor != 'ASISTENCIA' ? FontWeight.bold : FontWeight.normal, color: estatusLeyServidor == 'RETARDO' || estatusLeyServidor == 'FALTA' ? Colors.red.shade700 : Colors.black54))),
+                                                    // 8. ✅ MINUTOS EXACTOS DE RETARDO O SOBRETIEMPO
+                          DataCell(Builder(builder: (context) {
+                            String textoTiempo = '0 min';
+                            Color colorTiempo = Colors.black54;
+
+                            if (entradaVisual != '--:--' && (estatusLeyServidor == 'RETARDO' || estatusLeyServidor == 'FALTA' || estatusLeyServidor == 'SOBRETIEMPO')) {
+                              final referenciaStr = estatusLeyServidor == 'SOBRETIEMPO' ? salidaVisual : entradaVisual;
+                              final partes = referenciaStr.split(':');
+                              final minRef = int.parse(partes[0]) * 60 + int.parse(partes[1]);
+                              final minReal = f.hour * 60 + f.minute;
+                              int diff = minReal - minRef;
+                              if (diff < -720) diff += 1440;
+                              if (diff > 720) diff -= 1440;
+
+                              if (diff > 0) {
+                                textoTiempo = estatusLeyServidor == 'SOBRETIEMPO' ? '+$diff min extra' : '+$diff min';
+                                colorTiempo = estatusLeyServidor == 'SOBRETIEMPO' ? Colors.purple.shade700 : Colors.red.shade700;
+                              }
+                            }
+                            return Text(textoTiempo, style: TextStyle(fontSize: 13, fontWeight: textoTiempo != '0 min' ? FontWeight.bold : FontWeight.normal, color: colorTiempo));
+                          })),
+
                           
                           DataCell(
                             Chip(
@@ -1466,15 +1530,18 @@ class _AdminPageState extends State<AdminPage> {
                                 const SizedBox(height: 6),
                                 TextFormField(controller: _toleranciaController, keyboardType: TextInputType.number, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
                                 const SizedBox(height: 20),
-                                SizedBox(
+                                 SizedBox(
                                   width: double.infinity,
                                   child: ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                                    style: ElevatedButton.styleFrom(backgroundColor: _turnoIdEdicion == null ? Colors.teal : Colors.amber.shade800, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                                     onPressed: _registrarNuevoTurno,
-                                    icon: const Icon(Icons.save, color: Colors.white, size: 16),
-                                    label: const Text('Guardar Turno en Receta', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    icon: Icon(_turnoIdEdicion == null ? Icons.save : Icons.edit, color: Colors.white, size: 16),
+                                    label: Text(_turnoIdEdicion == null ? 'Guardar Turno en Receta' : 'Actualizar Turno', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                   ),
                                 ),
+                                if (_turnoIdEdicion != null)
+                                  Center(child: TextButton(onPressed: _cancelarEdicionTurno, child: const Text('Cancelar Edición', style: TextStyle(color: Colors.red)))),
+
                               ],
                             ),
                           ),
@@ -1500,6 +1567,8 @@ class _AdminPageState extends State<AdminPage> {
                                         DataColumn(label: Text('HORA ENTRADA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                                         DataColumn(label: Text('HORA SALIDA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                                         DataColumn(label: Text('TOLERANCIA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('ACCIONES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+
                                       ],
                                       rows: tLista.map((t) {
                                         return DataRow(cells: [
@@ -1507,6 +1576,15 @@ class _AdminPageState extends State<AdminPage> {
                                           DataCell(Text(t['hora_entrada']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
                                           DataCell(Text(t['hora_salida']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
                                           DataCell(Text('${t['tolerancia_minutos']} min', style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
+                                          DataCell(Row(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    IconButton(icon: const Icon(Icons.edit, color: Colors.amber, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _activarEdicionTurno(t)),
+    const SizedBox(width: 10),
+    IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _eliminarTurno(t['id'].toString(), t['nombre_turno']?.toString() ?? '')),
+  ],
+)),
+
                                         ]);
                                       }).toList(),
                                     ),
