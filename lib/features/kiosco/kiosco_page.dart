@@ -4,6 +4,9 @@ import 'package:camera/camera.dart';
 import '../../core/supabase_service.dart';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:web/web.dart' as web;
+
+
 
 class KioscoPage extends StatefulWidget {
   const KioscoPage({super.key});
@@ -23,13 +26,55 @@ class _KioscoPageState extends State<KioscoPage> {
   
   // 🌟 NUEVA VARIABLE: Controla si el PIN se muestra o se oculta como asteriscos
   bool _ocultarPin = true;
+  
+    bool _kioscoAutorizado = false;
+  bool _validandoLoginKiosco = false;
+  bool _ocultarClaveKiosco = true;
+  final TextEditingController _loginKioscoUsuarioCtrl = TextEditingController();
+  final TextEditingController _loginKioscoClaveCtrl = TextEditingController();
+
+  Future<void> _validarLoginKiosco() async {
+    final usuario = _loginKioscoUsuarioCtrl.text.trim();
+    final clave = _loginKioscoClaveCtrl.text.trim();
+    if (usuario.isEmpty || clave.isEmpty) return;
+
+    setState(() => _validandoLoginKiosco = true);
+    try {
+      final bool esValido = await SupabaseService.client.rpc(
+        'validar_acceso_sistema',
+        params: {'p_rol': 'KIOSCO', 'p_usuario': usuario, 'p_clave': clave},
+      );
+      if (!mounted) return;
+      if (esValido) {
+        web.window.localStorage.setItem('kiosco_sesion_activa', 'true');
+        setState(() {
+          _kioscoAutorizado = true;
+          _loginKioscoClaveCtrl.clear();
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ Credenciales de Kiosco incorrectas.'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _validandoLoginKiosco = false);
+    }
+  }
+
+
 
   @override
   void initState() {
     super.initState();
     _iniciarReloj();
+    _kioscoAutorizado = web.window.localStorage.getItem('kiosco_sesion_activa') == 'true';
+
   }
 
+
+ 
   @override
   void dispose() {
     _relojTimer?.cancel();
@@ -218,10 +263,22 @@ class _KioscoPageState extends State<KioscoPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'VALIDACIÓN VISUAL',
-            style: TextStyle(color: Colors.white70, fontSize: esPantallaChica ? 12 : 14, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                    Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('VALIDACIÓN VISUAL', style: TextStyle(color: Colors.white70, fontSize: esPantallaChica ? 12 : 14, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  web.window.localStorage.removeItem('kiosco_sesion_activa');
+                  _apagarCamara();
+                  setState(() => _kioscoAutorizado = false);
+                },
+                child: const Icon(Icons.lock_open, color: Colors.white38, size: 16),
+              ),
+            ],
           ),
+
           SizedBox(height: esPantallaChica ? 2 : 6),
           Text(
             _horaDigital,
@@ -312,6 +369,68 @@ class _KioscoPageState extends State<KioscoPage> {
 
   @override
   Widget build(BuildContext context) {
+
+        if (!_kioscoAutorizado) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF0D5C46),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.qr_code_scanner_rounded, size: 54, color: Color(0xFF0D5C46)),
+                      const SizedBox(height: 12),
+                      const Text('ACTIVAR TERMINAL KIOSCO', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                      const SizedBox(height: 4),
+                      const Text('Autoriza este dispositivo para checar asistencias', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _loginKioscoUsuarioCtrl,
+                        decoration: InputDecoration(labelText: 'Usuario Kiosco', prefixIcon: const Icon(Icons.store), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _loginKioscoClaveCtrl,
+                        obscureText: _ocultarClaveKiosco,
+                        onSubmitted: (_) => _validarLoginKiosco(),
+                        decoration: InputDecoration(
+                          labelText: 'Clave de Acceso',
+                          prefixIcon: const Icon(Icons.vpn_key),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          suffixIcon: IconButton(
+                            icon: Icon(_ocultarClaveKiosco ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () => setState(() => _ocultarClaveKiosco = !_ocultarClaveKiosco),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D5C46), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                          onPressed: _validandoLoginKiosco ? null : _validarLoginKiosco,
+                          child: _validandoLoginKiosco
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('ACTIVAR KIOSCO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final bool camaraLista = _cameraController != null && _cameraController!.value.isInitialized;
     final bool sePuedeRegistrar = _pinActual.length == 4 && camaraLista && !_estaProcesando;
 

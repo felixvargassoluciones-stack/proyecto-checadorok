@@ -110,6 +110,42 @@ class _AdminPageState extends State<AdminPage> {
   String? _empleadoIdEdicion;
   String? _turnoIdEdicion;
 
+    bool _sesionAdminAutorizada = false;
+  bool _validandoLoginAdmin = false;
+  bool _ocultarClaveAdmin = true;
+  final TextEditingController _loginAdminUsuarioCtrl = TextEditingController();
+  final TextEditingController _loginAdminClaveCtrl = TextEditingController();
+
+  Future<void> _validarLoginAdmin() async {
+    final usuario = _loginAdminUsuarioCtrl.text.trim();
+    final clave = _loginAdminClaveCtrl.text.trim();
+    if (usuario.isEmpty || clave.isEmpty) return;
+
+    setState(() => _validandoLoginAdmin = true);
+    try {
+      final bool esValido = await SupabaseService.client.rpc(
+        'validar_acceso_sistema',
+        params: {'p_rol': 'ADMIN', 'p_usuario': usuario, 'p_clave': clave},
+      );
+      if (!mounted) return;
+      if (esValido) {
+        setState(() {
+          _sesionAdminAutorizada = true;
+          _loginAdminClaveCtrl.clear();
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ Usuario o contraseña de Administrador incorrectos.'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _validandoLoginAdmin = false);
+    }
+  }
+
+
   DateTime? _fechaIngresoSeleccionada; 
 
   @override
@@ -1440,6 +1476,69 @@ class _AdminPageState extends State<AdminPage> {
 
   @override
   Widget build(BuildContext context) {
+
+       if (!_sesionAdminAutorizada) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF0F172A),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.admin_panel_settings, size: 54, color: Colors.teal),
+                      const SizedBox(height: 12),
+                      const Text('ADMINISTRACIÓN CENTRAL', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                      const SizedBox(height: 4),
+                      const Text('Ingresa tus credenciales para continuar', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _loginAdminUsuarioCtrl,
+                        decoration: InputDecoration(labelText: 'Usuario', prefixIcon: const Icon(Icons.person), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _loginAdminClaveCtrl,
+                        obscureText: _ocultarClaveAdmin,
+                        onSubmitted: (_) => _validarLoginAdmin(),
+                        decoration: InputDecoration(
+                          labelText: 'Contraseña',
+                          prefixIcon: const Icon(Icons.lock),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          suffixIcon: IconButton(
+                            icon: Icon(_ocultarClaveAdmin ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () => setState(() => _ocultarClaveAdmin = !_ocultarClaveAdmin),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                          onPressed: _validandoLoginAdmin ? null : _validarLoginAdmin,
+                          child: _validandoLoginAdmin
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('INGRESAR AL PANEL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+
     final bool esPantallaMovil = MediaQuery.of(context).size.width < 850;
 
     final formularioTurnoWidget = Container(
@@ -1549,6 +1648,12 @@ class _AdminPageState extends State<AdminPage> {
         ),
         actions: [
           IconButton(icon: const Icon(Icons.print, color: Colors.white), onPressed: _imprimirPDF),
+                    IconButton(
+            tooltip: 'Cerrar Sesión',
+            icon: const Icon(Icons.logout, color: Colors.white),
+            onPressed: () => setState(() => _sesionAdminAutorizada = false),
+          ),
+
           const SizedBox(width: 6),
         ],
       ),
