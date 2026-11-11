@@ -1879,63 +1879,7 @@ class _AdminPageState extends State<AdminPage> {
 
 
 
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.all(esPantallaMovil ? 10.0 : 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: _buildCardMetrica('PRESENTES', '0', Icons.people, Colors.green, compacto: esPantallaMovil)),
-                      SizedBox(width: esPantallaMovil ? 6 : 10),
-                      Expanded(child: _buildCardMetrica('RETARDOS', '0', Icons.timer, Colors.amber, compacto: esPantallaMovil)),
-                      SizedBox(width: esPantallaMovil ? 6 : 10),
-                      Expanded(child: _buildCardMetrica('AUSENTES', '0', Icons.person_off, Colors.red, compacto: esPantallaMovil)),
-                    ],
-                  ),
-                  SizedBox(height: esPantallaMovil ? 10 : 16),
-                  Expanded(
-                    child: Builder(builder: (context) {
-                      if (_seccionActivaSidebar == 'INICIO') {
-                        return Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xffe2e8f0))),
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.dashboard_customize, size: 60, color: Colors.teal),
-                                const SizedBox(height: 16),
-                                const Text('¡Bienvenido al Panel de Control de Asistencia!', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                                const SizedBox(height: 6),
-                                Text(
-                                  esPantallaMovil ? 'Abre el menú superior izquierdo (☰) para navegar.' : 'Selecciona una opción del menú de la izquierda para comenzar.',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 13, color: Colors.grey),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      } else if (_seccionActivaSidebar == 'REGISTRO') {
-                        return esPantallaMovil
-                            ? SingleChildScrollView(child: Column(children: [_buildFormularioAltaPersonal(), const SizedBox(height: 16), SizedBox(height: 420, child: _buildTablaEmpleadosExcel())]))
-                            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 320, child: _buildFormularioAltaPersonal()), const SizedBox(width: 16), Expanded(child: _buildTablaEmpleadosExcel())]);
-                      } else if (_seccionActivaSidebar == 'MONITOREO') {
-                        return _buildSeccionFeedMonitoreo();
-                      } else {
-                        return esPantallaMovil
-                            ? SingleChildScrollView(child: Column(children: [formularioTurnoWidget, const SizedBox(height: 16), SizedBox(height: 360, child: tablaTurnosWidget)]))
-                            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [formularioTurnoWidget, const SizedBox(width: 16), Expanded(child: tablaTurnosWidget)]);
-                      }
-                    }),
-                  ),
-                ],
-              ),
-            ),
-          ),
+         
         ],
       ),
     );
