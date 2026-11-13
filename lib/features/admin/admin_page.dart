@@ -903,6 +903,7 @@ class _AdminPageState extends State<AdminPage> {
               const Divider(height: 20),
               
               // SECCIÓN EMPRESA
+                           // SECCIÓN EMPRESA
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 const Text('Empresa:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 Row(children: [
@@ -912,7 +913,13 @@ class _AdminPageState extends State<AdminPage> {
                     IconButton(icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _eliminarEmpresaDialog),
                     const SizedBox(width: 12),
                   ],
-                  if (_empresasDisponibles.isNotEmpty && _empleadoIdEdicion == null) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaEmpresaManualmente = !_crearNuevaEmpresaManualmente), icon: Icon(_crearNuevaEmpresaManualmente ? Icons.list : Icons.add, size: 14, color: Colors.teal), label: Text(_crearNuevaEmpresaManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal))),
+                  if (_empleadoIdEdicion == null)
+                    TextButton.icon(
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      onPressed: () => setState(() => _crearNuevaEmpresaManualmente = !_crearNuevaEmpresaManualmente),
+                      icon: Icon(_crearNuevaEmpresaManualmente ? Icons.list : Icons.add_circle_outline, size: 14, color: Colors.teal),
+                      label: Text(_crearNuevaEmpresaManualmente ? "Ver lista" : "Nuevo manual", style: const TextStyle(fontSize: 11, color: Colors.teal)),
+                    ),
                 ])
               ]),
               const SizedBox(height: 6),
@@ -923,15 +930,22 @@ class _AdminPageState extends State<AdminPage> {
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 const Text('Sucursal:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 Row(children: [
-                  if (_sucursalSeleccionadaUuid != null && !_crearNuevaSucursalManualmente && _empleadoIdEdicion == null) ...[
+                  if (_sucursalSeleccionadaUuid != null && !_crearNuevaSucursalManualmente && !_crearNuevaEmpresaManualmente && _empleadoIdEdicion == null) ...[
                     IconButton(icon: const Icon(Icons.edit, size: 14, color: Colors.amber), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _modificarSucursalDialog),
                     const SizedBox(width: 6),
                     IconButton(icon: const Icon(Icons.delete_forever, size: 14, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: _eliminarSucursalDialog),
                     const SizedBox(width: 12),
                   ],
-                  if (_sucursalesDisponibles.isNotEmpty && !_crearNuevaEmpresaManualmente && _empleadoIdEdicion == null) TextButton.icon(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => setState(() => _crearNuevaSucursalManualmente = !_crearNuevaSucursalManualmente), icon: Icon(_crearNuevaSucursalManualmente ? Icons.list : Icons.add_business, size: 14, color: Colors.teal), label: Text(_crearNuevaSucursalManualmente ? "Ver lista" : "Nueva manual", style: const TextStyle(fontSize: 11, color: Colors.teal))),
+                  if (!_crearNuevaEmpresaManualmente && _empleadoIdEdicion == null)
+                    TextButton.icon(
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      onPressed: () => setState(() => _crearNuevaSucursalManualmente = !_crearNuevaSucursalManualmente),
+                      icon: Icon(_crearNuevaSucursalManualmente ? Icons.list : Icons.add_circle_outline, size: 14, color: Colors.teal),
+                      label: Text(_crearNuevaSucursalManualmente ? "Ver lista" : "Nuevo manual", style: const TextStyle(fontSize: 11, color: Colors.teal)),
+                    ),
                 ])
               ]),
+
               const SizedBox(height: 6),
               _cargandoDatos ? const LinearProgressIndicator(color: Colors.teal) : (_crearNuevaSucursalManualmente || _crearNuevaEmpresaManualmente ? TextFormField(controller: _nuevaSucursalController, textCapitalization: TextCapitalization.characters, style: const TextStyle(fontSize: 14), decoration: InputDecoration(hintText: 'Nombre de la sucursal', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.teal.withValues(alpha: 0.02)), validator: (val) => val == null || val.trim().isEmpty ? 'Requerido' : null) : DropdownButtonFormField<String>(initialValue: _sucursalSeleccionadaUuid, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), filled: true, fillColor: Colors.grey.shade50), items: _sucursalesDisponibles.where((s) => s['empresa_id'].toString() == _empresaSeleccionadaUuid).map((s) => DropdownMenuItem(value: s['id'].toString(), child: Text(s['nombre'] ?? ''))).toList(), onChanged: (v) => setState(() => _sucursalSeleccionadaUuid = v), validator: (v) => v == null ? 'Requerido' : null)),
               const SizedBox(height: 12),
